@@ -10,4 +10,8 @@ target_compile_features(MatMul PUBLIC cxx_std_11)
 
 set_target_properties(MatMul
                       PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+add_executable(Parameters
+               Parameters.cu)           
+            
                     

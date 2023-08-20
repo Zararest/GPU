@@ -1,11 +1,8 @@
-// Matrices are stored in row-major order:
-// M(row, col) = *(M.elements + row * M.stride + col)
-typedef struct {
-    int width;
-    int height;
-    int stride;
-    float* elements;
-} Matrix;
+// C is a pointer to initial Matrix, so in order to get element from sub-matrix
+//  we need to calculate address as if it is initial matrix. 
+// Stride field serves this purpose.
+
+
 // Get a matrix element
 __device__ float GetElement(const Matrix A, int row, int col)
 {
