@@ -18,7 +18,6 @@ __global__ void simpleMatMulKernel(DeviceMatrix A,
   for (size_t i = 0; i < A.Width; ++i)
     Res += A[Row][i] * B[i][Col];
   C[Row][Col] = Res;
-  printf("Res: %f\n", Res);
 }
 
 HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {

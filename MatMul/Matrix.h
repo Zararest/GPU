@@ -24,7 +24,6 @@ class HostMatrix final {
 public:
   size_t Width = 0;
   size_t Height = 0;
-  // M(row, col) = *(M.elements + row * M.stride + col)
   std::vector<float> Elements; 
 
   HostMatrix(size_t Height, size_t Width) : Width{Width}, Height{Height}, Elements(Height * Width)  {}
@@ -94,11 +93,12 @@ public:
   static HostMatrix getHostMat(const DeviceMatrix &DevMat) {
     HostMatrix HostMat{DevMat.Height, DevMat.Width};
     auto SizeInFloat = DevMat.Width * DevMat.Height;
-    auto *Buf = new float(SizeInFloat);
+    auto *Buf = new float[SizeInFloat];
     cudaMemcpy(Buf, DevMat.Elements, SizeInFloat * sizeof(float), 
                cudaMemcpyDeviceToHost);
     HostMat.Elements.clear();
     std::copy(Buf, Buf + SizeInFloat, std::back_inserter(HostMat.Elements));
+    delete[] Buf;
     return HostMat;
   }
 
@@ -114,6 +114,7 @@ class MatrixView final {
   size_t Width = 0;
   size_t Height = 0;
   size_t Stride = 0;
+  // M(row, col) = *(M.elements + row * M.stride + col)
   float* elements = nullptr;
 };
 
