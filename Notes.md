@@ -187,13 +187,13 @@ typedef struct {
 } Matrix;
 
 // Thread block size
-#define BLOCK_SIZE 16
+#define BlockSize 16
 
 // Forward declaration of the matrix multiplication kernel
 __global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
 
 // Matrix multiplication - Host code
-// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+// Matrix dimensions are assumed to be multiples of BlockSize
 void MatMul(const Matrix A, const Matrix B, Matrix C)
 {
     // Load A and B to device memory
@@ -217,7 +217,7 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     cudaMalloc(&d_C.elements, size);
 
     // Invoke kernel
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimBlock(BlockSize, BlockSize);
     dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
     MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 
@@ -329,7 +329,7 @@ __global__ void clusterHist_kernel(int *bins, const int nbins, const int bins_pe
 ## С++ расширение
 Для опреждления кернела используется `__device__` спецификатор.
 
-`__global__` - определения кернела.
+`__global__` - определения кернела. Такой кернел может быть вызван из другого кернела. 
 
 Определение переменных:
 - `__device__` - глобальная переменная, которая доступна всем тредам в контексте (и хосту)
@@ -351,7 +351,7 @@ __device__ void func()      // __device__ or __global__ function
 ### Vector types
 Существуют встроенные векторнные типы:
 ```cpp
-int2 make_int2(int x, int y); //vector may be accessed with (x,y)
+int2 make_int2(int x, int y); //vector may be accessed with (x,y)\
 ```
 
 Существуют встроенные переменные:
@@ -367,5 +367,14 @@ int2 make_int2(int x, int y); //vector may be accessed with (x,y)
 Любое обращение к памяти без синхронизации это УБ.
 Надо либо использовать атомики либо синхронизацию.
 
-# TODO
-Закончить в папке MatMul и прогнать тесты
+### Построение программы
+Каждый кернел должен выполнять одну нераспараллеливаемую задачу тк таким образом можно добиться расширяемости.
+
+В каждом тред блоке должно быть количество тредов равно степени двойки. 
+Количество тред блоков не ограничено.
+
+### Не все функции поддержаны в куде
+Например агрегатная инициализация не поддержина в куде
+
+### Кернелы падают без сигфолта
+ПОТОМУ ЧТО НЕ НАДО ПЕРЕДАВАТЬ В КЕРНЕЛ ССЫЛКУ

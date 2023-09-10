@@ -10,7 +10,7 @@ int main() {
   std::cout << "Cuda" << std::endl;
   //int *GlobA = nullptr;                     //this is device memory. so we can't print it
   int LocA = 2;
-  //cudaMalloc(&GlobA, sizeof(GlobA));
+  cudaMalloc(nullptr, 1);
 
   cudaMemcpyToSymbol(A, &LocA, sizeof(int));
   MatMul<<<10, 1>>>();

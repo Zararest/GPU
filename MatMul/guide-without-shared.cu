@@ -7,13 +7,13 @@ typedef struct {
 } Matrix;
 
 // Thread block size
-#define BLOCK_SIZE 16
+#define BlockSize 16
 
 // Forward declaration of the matrix multiplication kernel
 __global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
 
 // Matrix multiplication - Host code
-// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+// Matrix dimensions are assumed to be multiples of BlockSize
 void MatMul(const Matrix A, const Matrix B, Matrix C)
 {
     // Load A and B to device memory
@@ -37,7 +37,7 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     cudaMalloc(&d_C.elements, size);
 
     // Invoke kernel
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimBlock(BlockSize, BlockSize);
     dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
     MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 
