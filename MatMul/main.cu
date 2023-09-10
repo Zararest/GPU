@@ -26,6 +26,8 @@ void matMulWithoutShared(Config MatrConfig) {
     A.print(std::cout);
     std::cout << "B:" << std::endl;
     B.print(std::cout);
+    std::cout << "C: " << std::endl;
+    C.print(std::cout);
   }
 
   if (!MatrConfig.CheckMat)
@@ -82,6 +84,12 @@ int main(int Argc, char **Argv) {;
       std::cout << "Running with matricies dump" << std::endl;
       continue;
     }
+
+    if (Option == "--params") {
+      printDeviceLimits(std::cout);
+      continue;
+    }
+
     std::cout << "Unknown argument: " << Option << std::endl;
     assert(false);
   }

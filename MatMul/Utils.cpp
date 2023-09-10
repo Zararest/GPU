@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "Matrix.h"
 
 #include <random>
 
@@ -24,3 +25,30 @@ HostMatrix referenceMul(HostMatrix &A, HostMatrix &B) {
         NewMatrix[Row][Col] += A[Row][k] * B[k][Col];
   return NewMatrix;
 }   
+
+void printDeviceLimits(std::ostream &S) {
+  int Device;
+  cudaGetDevice(&Device);
+
+  struct cudaDeviceProp Props;
+  cudaGetDeviceProperties(&Props, Device);
+  S << "Parameters of the device:" << std::endl;
+  S << "\tGlobal memory size: " << Props.totalGlobalMem << "\n"
+    << "\tShared memory size (per block): " << Props.sharedMemPerBlock << "\n"
+    << "\tConstant memory size: " << Props.totalConstMem << "\n"
+    << "\tRegs per block: " << Props.regsPerBlock << "\n"
+    << "\tMax threads per block: " << Props.maxThreadsPerBlock << "\n"
+    << "\tMax threads dim: {" << Props.maxThreadsDim[0] << ", " 
+    << Props.maxThreadsDim[1] << ", " << Props.maxThreadsDim[2] << "}\n"
+    << "\tMax grid dim: {" << Props.maxGridSize[0] << ", " 
+    << Props.maxGridSize[1] << ", " << Props.maxGridSize[2] << "}\n"
+    << "\tClock rate: " << Props.clockRate << std::endl;
+}
+
+void checkKernelsExec() {
+  auto Err = cudaGetLastError();
+  if (Err != cudaSuccess) {
+    std::cout << "Kernel terminated with error: " << cudaGetErrorString(Err) << std::endl;
+    exit(1);
+  }
+}

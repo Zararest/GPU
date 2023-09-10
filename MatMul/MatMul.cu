@@ -1,6 +1,5 @@
 #include "Matrix.h"
-
-#include <cmath>
+#include "Utils.h"
 
 // Thread block size
 constexpr size_t BlockSize = 16;
@@ -32,9 +31,11 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
   // 16 * 16 = 256 blocks per Thread Block
   dim3 ThrBlockDim{RealBlockSize, RealBlockSize};
   // matrix may be bigger than BlockSize, so 
-  dim3 BlockGridDim{std::ceil(static_cast<float>(B.Width) / static_cast<float>(ThrBlockDim.x)), 
-                    std::ceil(static_cast<float>(A.Height) / static_cast<float>(ThrBlockDim.y))};
+  dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x), 
+                    ceilDiv(A.Height, ThrBlockDim.y)};
+  DEBUG_EXPR(std::cout << "Block grid: {" << BlockGridDim.x << ", " << BlockGridDim.y << "}" << std::endl);
   simpleMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
+  checkKernelsExec();
 
   auto Res = DeviceMatrix::getHostMat(DevC);
   DevA.free();

@@ -1,8 +1,9 @@
 #pragma once
 
+#include "Utils.h"
+
 #include <cuda_runtime_api.h>
 #include <cuda.h>
-
 #include <vector>
 #include <algorithm>
 #include <cassert>
@@ -63,24 +64,24 @@ public:
   size_t Height = 0;
   float* Elements = nullptr;
 
-  __host__ __device__ 
+  __host__
   DeviceMatrix(const HostMatrix &HMat) : Width{HMat.Width},
                                          Height{HMat.Height} {
     auto Size = Width * Height * sizeof(float);
-    cudaMalloc((void**) &Elements, Size);
-    cudaMemcpy(Elements, HMat.Elements.data(), Size, 
-               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMalloc((void**) &Elements, Size));
+    CUDA_CHECK(cudaMemcpy(Elements, HMat.Elements.data(), Size, 
+               cudaMemcpyHostToDevice));
   }
 
-  __host__ __device__ 
+  __host__
   DeviceMatrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
     cudaMalloc((void**) &Elements, Size);
   }
 
-  __host__ __device__ 
+  __host__ 
   void free() {
-    cudaFree(Elements);
+    CUDA_CHECK(cudaFree(Elements));
   }
 
   __host__ __device__
@@ -94,8 +95,8 @@ public:
     HostMatrix HostMat{DevMat.Height, DevMat.Width};
     auto SizeInFloat = DevMat.Width * DevMat.Height;
     auto *Buf = new float[SizeInFloat];
-    cudaMemcpy(Buf, DevMat.Elements, SizeInFloat * sizeof(float), 
-               cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(Buf, DevMat.Elements, SizeInFloat * sizeof(float), 
+               cudaMemcpyDeviceToHost));
     HostMat.Elements.clear();
     std::copy(Buf, Buf + SizeInFloat, std::back_inserter(HostMat.Elements));
     delete[] Buf;
