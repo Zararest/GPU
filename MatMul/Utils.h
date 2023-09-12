@@ -29,8 +29,9 @@ void printDeviceLimits(std::ostream &S);
 void checkKernelsExec();
 
 template <typename T1, typename T2>
+__device__ __host__
 size_t ceilDiv(T1 Lhs, T2 Rhs) {
   auto LhsF = static_cast<float>(Lhs);
   auto RhsF = static_cast<float>(Rhs);
-  return std::ceil(LhsF / RhsF);
+  return ceil(LhsF / RhsF);
 }

@@ -45,15 +45,14 @@ public:
 
 class DeviceMatrix final {
   struct Proxy {
-    float *RowPtr = nullptr;
+    float *RowPtr;
     size_t Width = 0;
 
-    __host__ __device__
+    __device__
     Proxy(float *RowPtr, size_t Width) : RowPtr{RowPtr}, Width{Width} {}
 
-    __host__ __device__
+    __device__
     float &operator [](size_t ColNum) {
-      assert(RowPtr);
       assert(ColNum < Width);
       return RowPtr[ColNum];
     }
@@ -62,7 +61,7 @@ class DeviceMatrix final {
 public:
   size_t Width = 0;
   size_t Height = 0;
-  float* Elements = nullptr;
+  float* Elements;
 
   __host__
   DeviceMatrix(const HostMatrix &HMat) : Width{HMat.Width},
@@ -103,20 +102,38 @@ public:
     return HostMat;
   }
 
-  __host__ __device__
+  __device__
   Proxy operator [](size_t RowNum) {
-    assert(Elements);
     assert(RowNum < Height);
     return {Elements + RowNum * Width, Width};
   }
 };  
 
-class MatrixView final {
-  size_t Width = 0;
-  size_t Height = 0;
-  size_t Stride = 0;
-  // M(row, col) = *(M.elements + row * M.stride + col)
-  float* elements = nullptr;
+class Tile {
+  struct Proxy {
+    size_t TileSize = 0;
+    float *RowPtr;
+
+    float &operator [](size_t ColNum) {
+      assert(ColNum < TileSize);
+      return RowPtr[ColNum];
+    }
+  };
+
+public:
+  size_t Size = 0;            // size of the square tile
+  size_t MatrWidth = 0;       // width of the real matrix
+  size_t TilePosX = 0;        // column of the tile
+  size_t TilePosY = 0;        // row of the tile
+  float *Elements;            // elements of the real matrix
+
+  __device__
+  Proxy operator [](size_t RowNum) {
+    assert(RowNum < Size);
+    auto RowPtr = Elements + RowNum * MatrWidth + TilePos;
+    return Proxy{Size, RowPtr};
+  }
+  
 };
 
 void sharedMatMul(const HostMatrix A, const HostMatrix B, HostMatrix C);

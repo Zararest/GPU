@@ -27,22 +27,25 @@ HostMatrix referenceMul(HostMatrix &A, HostMatrix &B) {
 }   
 
 void printDeviceLimits(std::ostream &S) {
-  int Device;
-  cudaGetDevice(&Device);
+  int DeviceCount;
+  cudaGetDeviceCount(&DeviceCount);
+  S << "Number of the devices: " << DeviceCount << "\n" << std::endl;
 
-  struct cudaDeviceProp Props;
-  cudaGetDeviceProperties(&Props, Device);
-  S << "Parameters of the device:" << std::endl;
-  S << "\tGlobal memory size: " << Props.totalGlobalMem << "\n"
-    << "\tShared memory size (per block): " << Props.sharedMemPerBlock << "\n"
-    << "\tConstant memory size: " << Props.totalConstMem << "\n"
-    << "\tRegs per block: " << Props.regsPerBlock << "\n"
-    << "\tMax threads per block: " << Props.maxThreadsPerBlock << "\n"
-    << "\tMax threads dim: {" << Props.maxThreadsDim[0] << ", " 
-    << Props.maxThreadsDim[1] << ", " << Props.maxThreadsDim[2] << "}\n"
-    << "\tMax grid dim: {" << Props.maxGridSize[0] << ", " 
-    << Props.maxGridSize[1] << ", " << Props.maxGridSize[2] << "}\n"
-    << "\tClock rate: " << Props.clockRate << std::endl;
+  for (int i = 0; i < DeviceCount; ++i) {
+    struct cudaDeviceProp Props;
+    cudaGetDeviceProperties(&Props, i);
+    S << "Parameters of the device " << i << ":" << std::endl;
+    S << "\tGlobal memory size: " << Props.totalGlobalMem << "\n"
+      << "\tShared memory size (per block): " << Props.sharedMemPerBlock << "\n"
+      << "\tConstant memory size: " << Props.totalConstMem << "\n"
+      << "\tRegs per block: " << Props.regsPerBlock << "\n"
+      << "\tMax threads per block: " << Props.maxThreadsPerBlock << "\n"
+      << "\tMax threads dim: {" << Props.maxThreadsDim[0] << ", " 
+      << Props.maxThreadsDim[1] << ", " << Props.maxThreadsDim[2] << "}\n"
+      << "\tMax grid dim: {" << Props.maxGridSize[0] << ", " 
+      << Props.maxGridSize[1] << ", " << Props.maxGridSize[2] << "}\n"
+      << "\tClock rate: " << Props.clockRate << std::endl;
+  }
 }
 
 void checkKernelsExec() {
