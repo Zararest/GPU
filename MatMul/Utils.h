@@ -1,25 +1,27 @@
 #pragma once
 
-#include <cuda_runtime_api.h>
-#include <cuda.h>
 #include <cmath>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <iostream>
 
 #define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) (expr)
-#else 
+#else
 #define DEBUG_EXPR(expr)
 #endif
 
-#define CUDA_CHECK(expr) {  auto MyErr = (expr) ;                                     \
-                            if (MyErr != cudaSuccess) {                               \
-                              printf("%s in %s at line %d\n",                         \
-                                      cudaGetErrorString(MyErr), __FILE__, __LINE__); \
-                              exit(1);                                                \
-                            }}
-
+#define CUDA_CHECK(expr)                                                       \
+  {                                                                            \
+    auto MyErr = (expr);                                                       \
+    if (MyErr != cudaSuccess) {                                                \
+      printf("%s in %s at line %d\n", cudaGetErrorString(MyErr), __FILE__,     \
+             __LINE__);                                                        \
+      exit(1);                                                                 \
+    }                                                                          \
+  }
 
 struct HostMatrix;
 
@@ -29,8 +31,7 @@ void printDeviceLimits(std::ostream &S);
 void checkKernelsExec();
 
 template <typename T1, typename T2>
-__device__ __host__
-size_t ceilDiv(T1 Lhs, T2 Rhs) {
+__device__ __host__ size_t ceilDiv(T1 Lhs, T2 Rhs) {
   auto LhsF = static_cast<float>(Lhs);
   auto RhsF = static_cast<float>(Rhs);
   return ceil(LhsF / RhsF);

@@ -27,10 +27,11 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
 
   // 16 * 16 = 256 blocks per Thread Block
   dim3 ThrBlockDim{BlockSize, BlockSize};
-  // matrix may be bigger than BlockSize, so 
-  dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x), 
+  // matrix may be bigger than BlockSize, so
+  dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x),
                     ceilDiv(A.Height, ThrBlockDim.y)};
-  DEBUG_EXPR(std::cout << "Block grid: {" << BlockGridDim.x << ", " << BlockGridDim.y << "}" << std::endl);
+  DEBUG_EXPR(std::cout << "Block grid: {" << BlockGridDim.x << ", "
+                       << BlockGridDim.y << "}" << std::endl);
   simpleMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
   checkKernelsExec();
 
@@ -41,32 +42,46 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
   return Res;
 }
 
-__device__  void fillTiles(size_t Iteration, 
-                           Tile &A, size_t AHeigth, 
-                           Tile &B, size_t BHeigth) {
-  assert(A.Size == B.Size);
-  auto Size = A.Size;
-  auto ATilePos = Iteration * Size;
-  for (size_t i = 0; i < Size; ++i)
-    for (size_t j = 0; j < Size; ++j) {
-      if ()
-    }
-       
+__device__ void fillTiles(size_t Iteration, Tile &ATile, 
+                          DeviceMatrix A, Tile &BTile,
+                          DeviceMatrix B) {
+  assert(ATile.Size == BTile.Size);
+  auto Size = ATile.Size;
+  auto CurTilePos = Iteration * Size;    // A.X == B.Y
+  ATile.X = CurTilePos;
+  BTile.Y = CurTilePos;
+  ATile[threadIdx.y][threadIdx.x] = 0.0;                 // this needs to omit check in tile calc
+  BTile[threadIdx.y][threadIdx.x] = 0.0;                          
+  if (threadIdx.x + ATile.X < A.Width && 
+      threadIdx.y + ATile.Y < A.Height)
+    ATile[threadIdx.y][threadIdx.x] = A[ATile.Y + threadIdx.y][ATile.X + threadIdx.x];
+  
+  if (threadIdx.x + BTile.X < B.Width &&
+      threadIdx.y + BTile.Y < B.Height)
+    BTile[threadIdx.y][threadIdx.x] = B[BTile.Y + threadIdx.y][BTile.X + threadIdx.x];
 }
 
-__global__ void tiledMatMulKernel(DeviceMatrix A, 
-                                  DeviceMatrix B, 
+__global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                   DeviceMatrix C) {
   auto TileWidth = blockIdx.x;
   auto NumOfTiles = ceilDiv(A.Width, blockDim.x);
   __shared__ float ASharedMem[TileWidth * TileWidth];
   __shared__ float BSharedMem[TileWidth * TileWidth];
-  auto ATile = Tile{TileWidth, A.Width, /*TilePosX*/ 0u, /*TilePosY*/ 0u, ASharedMem};
-  auto BTile = Tile{TileWidth, B.Width, /*TilePosX*/ 0u, /*TilePosY*/ 0u, BSharedMem};
+  auto ATile =
+      Tile{TileWidth, A.Width, /*X*/ 0u, blockIdx.y * TileWidth , ASharedMem};
+  auto BTile =
+      Tile{TileWidth, B.Width, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
 
+  auto Res = 0.0;
   for (size_t i = 0; i < NumOfTiles; ++i) {
-
+    fillTiles(i, ATile, A, BTile, B);
+    __syncthreads();
+    
+    for (size_t i = 0; i < TileWidth; ++i)
+      Res += ATile[threadIdx.y][i] * BTile[i][threadIdx.x];
+    __syncthreads();
   }
+  C[threadIdx.y][threadIdx.x] = Res;
 }
 
 HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
@@ -80,5 +95,5 @@ HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
   dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x),
                     ceilDiv(A.Height, ThrBlockDim.y)};
   tiledMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
-  checkKernelsExec();                  
+  checkKernelsExec();
 }

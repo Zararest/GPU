@@ -48,11 +48,10 @@ class DeviceMatrix final {
     float *RowPtr;
     size_t Width = 0;
 
-    __device__
-    Proxy(float *RowPtr, size_t Width) : RowPtr{RowPtr}, Width{Width} {}
+    __device__ Proxy(float *RowPtr, size_t Width)
+        : RowPtr{RowPtr}, Width{Width} {}
 
-    __device__
-    float &operator [](size_t ColNum) {
+    __device__ float &operator[](size_t ColNum) {
       assert(ColNum < Width);
       return RowPtr[ColNum];
     }
@@ -61,27 +60,23 @@ class DeviceMatrix final {
 public:
   size_t Width = 0;
   size_t Height = 0;
-  float* Elements;
+  float *Elements;
 
-  __host__
-  DeviceMatrix(const HostMatrix &HMat) : Width{HMat.Width},
-                                         Height{HMat.Height} {
+  __host__ DeviceMatrix(const HostMatrix &HMat)
+      : Width{HMat.Width}, Height{HMat.Height} {
     auto Size = Width * Height * sizeof(float);
-    CUDA_CHECK(cudaMalloc((void**) &Elements, Size));
-    CUDA_CHECK(cudaMemcpy(Elements, HMat.Elements.data(), Size, 
-               cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
+    CUDA_CHECK(cudaMemcpy(Elements, HMat.Elements.data(), Size,
+                          cudaMemcpyHostToDevice));
   }
 
-  __host__
-  DeviceMatrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
+  __host__ DeviceMatrix(size_t Height, size_t Width)
+      : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
     cudaMalloc((void**) &Elements, Size);
   }
 
-  __host__ 
-  void free() {
-    CUDA_CHECK(cudaFree(Elements));
-  }
+  __host__ void free() { CUDA_CHECK(cudaFree(Elements)); }
 
   __host__ __device__
   static bool checkMul(const DeviceMatrix &A, const DeviceMatrix &B,
@@ -94,46 +89,43 @@ public:
     HostMatrix HostMat{DevMat.Height, DevMat.Width};
     auto SizeInFloat = DevMat.Width * DevMat.Height;
     auto *Buf = new float[SizeInFloat];
-    CUDA_CHECK(cudaMemcpy(Buf, DevMat.Elements, SizeInFloat * sizeof(float), 
-               cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(Buf, DevMat.Elements, SizeInFloat * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     HostMat.Elements.clear();
     std::copy(Buf, Buf + SizeInFloat, std::back_inserter(HostMat.Elements));
     delete[] Buf;
     return HostMat;
   }
 
-  __device__
-  Proxy operator [](size_t RowNum) {
+  __device__ Proxy operator[](size_t RowNum) {
     assert(RowNum < Height);
     return {Elements + RowNum * Width, Width};
   }
-};  
+};
 
 class Tile {
   struct Proxy {
     size_t TileSize = 0;
     float *RowPtr;
 
-    float &operator [](size_t ColNum) {
+    float &operator[](size_t ColNum) {
       assert(ColNum < TileSize);
       return RowPtr[ColNum];
     }
   };
 
 public:
-  size_t Size = 0;            // size of the square tile
-  size_t MatrWidth = 0;       // width of the real matrix
-  size_t TilePosX = 0;        // column of the tile
-  size_t TilePosY = 0;        // row of the tile
-  float *Elements;            // elements of the real matrix
+  size_t Size = 0;      // size of the square tile
+  size_t MatrWidth = 0; // width of the real matrix
+  size_t X = 0;         // column of the tile
+  size_t Y = 0;         // row of the tile
+  float *Elements;      // elements of the real matrix
 
-  __device__
-  Proxy operator [](size_t RowNum) {
+  __device__ Proxy operator[](size_t RowNum) {
     assert(RowNum < Size);
     auto RowPtr = Elements + RowNum * MatrWidth + TilePos;
     return Proxy{Size, RowPtr};
   }
-  
 };
 
 void sharedMatMul(const HostMatrix A, const HostMatrix B, HostMatrix C);
