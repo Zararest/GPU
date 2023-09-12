@@ -2,21 +2,22 @@
 
 #include "Utils.h"
 
-#include <cuda_runtime_api.h>
-#include <cuda.h>
-#include <vector>
 #include <algorithm>
 #include <cassert>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <iostream>
+#include <vector>
 
 class HostMatrix final {
   struct Proxy {
     std::vector<float>::iterator It;
     size_t Width = 0;
 
-    Proxy(std::vector<float>::iterator It, size_t Width) : It{It}, Width{Width} {}
+    Proxy(std::vector<float>::iterator It, size_t Width)
+        : It{It}, Width{Width} {}
 
-    float &operator [](size_t ColNum) {
+    float &operator[](size_t ColNum) {
       assert(ColNum < Width);
       return *(It + ColNum);
     }
@@ -25,11 +26,12 @@ class HostMatrix final {
 public:
   size_t Width = 0;
   size_t Height = 0;
-  std::vector<float> Elements; 
+  std::vector<float> Elements;
 
-  HostMatrix(size_t Height, size_t Width) : Width{Width}, Height{Height}, Elements(Height * Width)  {}
+  HostMatrix(size_t Height, size_t Width)
+      : Width{Width}, Height{Height}, Elements(Height * Width) {}
 
-  Proxy operator [](size_t RowNum) {
+  Proxy operator[](size_t RowNum) {
     assert(RowNum < Height);
     return Proxy{Elements.begin() + RowNum * Width, Width};
   }
@@ -38,7 +40,7 @@ public:
     for (size_t i = 0; i < Height; ++i) {
       for (size_t j = 0; j < Width; ++j)
         std::cout << (*this)[i][j] << " ";
-    std::cout << std::endl;
+      std::cout << std::endl;
     }
   }
 };
@@ -73,19 +75,18 @@ public:
   __host__ DeviceMatrix(size_t Height, size_t Width)
       : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
-    cudaMalloc((void**) &Elements, Size);
+    cudaMalloc((void **)&Elements, Size);
   }
 
   __host__ void free() { CUDA_CHECK(cudaFree(Elements)); }
 
-  __host__ __device__
-  static bool checkMul(const DeviceMatrix &A, const DeviceMatrix &B,
-                       const DeviceMatrix &C) {
+  __host__ __device__ static bool checkMul(const DeviceMatrix &A,
+                                           const DeviceMatrix &B,
+                                           const DeviceMatrix &C) {
     return A.Width == B.Height && C.Height == A.Height && C.Width == B.Width;
   }
-  
-  __host__
-  static HostMatrix getHostMat(const DeviceMatrix &DevMat) {
+
+  __host__ static HostMatrix getHostMat(const DeviceMatrix &DevMat) {
     HostMatrix HostMat{DevMat.Height, DevMat.Width};
     auto SizeInFloat = DevMat.Width * DevMat.Height;
     auto *Buf = new float[SizeInFloat];

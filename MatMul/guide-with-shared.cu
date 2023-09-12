@@ -20,11 +20,10 @@ __device__ void SetElement(Matrix A, int row, int col,
  __device__ Matrix GetSubMatrix(Matrix A, int row, int col)
 {
     Matrix Asub;
-    Asub.width    = BlockSize;
-    Asub.height   = BlockSize;
+    Asub.width = BlockSize;
+    Asub.height = BlockSize;
     Asub.stride   = A.stride;
-    Asub.elements = &A.elements[A.stride * BlockSize * row
-                                         + BlockSize * col];
+    Asub.elements = &A.elements[A.stride * BlockSize * row + BlockSize * col];
     return Asub;
 }
 // Thread block size
@@ -84,27 +83,27 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     // Multiply each pair of sub-matrices together
     // and accumulate the results
     for (int m = 0; m < (A.width / BlockSize); ++m) {
-        // Get sub-matrix Asub of A
-        Matrix Asub = GetSubMatrix(A, blockRow, m);
-        // Get sub-matrix Bsub of B
-        Matrix Bsub = GetSubMatrix(B, m, blockCol);
-        // Shared memory used to store Asub and Bsub respectively
-        __shared__ float As[BlockSize][BlockSize];
-        __shared__ float Bs[BlockSize][BlockSize];
-        // Load Asub and Bsub from device memory to shared memory
-        // Each thread loads one element of each sub-matrix
-        As[row][col] = GetElement(Asub, row, col);
-        Bs[row][col] = GetElement(Bsub, row, col);
-        // Synchronize to make sure the sub-matrices are loaded
-        // before starting the computation
-        __syncthreads();
-        // Multiply Asub and Bsub together
-        for (int e = 0; e < BlockSize; ++e)
-            Cvalue += As[row][e] * Bs[e][col];
-        // Synchronize to make sure that the preceding
-        // computation is done before loading two new
-        // sub-matrices of A and B in the next iteration
-        __syncthreads();
+      // Get sub-matrix Asub of A
+      Matrix Asub = GetSubMatrix(A, blockRow, m);
+      // Get sub-matrix Bsub of B
+      Matrix Bsub = GetSubMatrix(B, m, blockCol);
+      // Shared memory used to store Asub and Bsub respectively
+      __shared__ float As[BlockSize][BlockSize];
+      __shared__ float Bs[BlockSize][BlockSize];
+      // Load Asub and Bsub from device memory to shared memory
+      // Each thread loads one element of each sub-matrix
+      As[row][col] = GetElement(Asub, row, col);
+      Bs[row][col] = GetElement(Bsub, row, col);
+      // Synchronize to make sure the sub-matrices are loaded
+      // before starting the computation
+      __syncthreads();
+      // Multiply Asub and Bsub together
+      for (int e = 0; e < BlockSize; ++e)
+        Cvalue += As[row][e] * Bs[e][col];
+      // Synchronize to make sure that the preceding
+      // computation is done before loading two new
+      // sub-matrices of A and B in the next iteration
+      __syncthreads();
     }
     // Write Csub to device memory
     // Each thread writes one element

@@ -52,12 +52,13 @@ void matMulWithoutShared(Config MatrConfig) {
   }
 }
 
-int main(int Argc, char **Argv) {;
+int main(int Argc, char **Argv) {
+  ;
   Argv++;
   Argc--;
   auto MatrConfig = Config{};
   while (Argc > 0) {
-    auto Option = std::string{Argv[0]};  
+    auto Option = std::string{Argv[0]};
     Argv++;
     Argc--;
     if (Option == "--check") {
@@ -73,11 +74,11 @@ int main(int Argc, char **Argv) {;
       MatrConfig.JointSize = std::stoi(Argv[2]);
       Argv += 3;
       Argc -= 3;
-      std::cout << "Matricies sizes: A{" << MatrConfig.Heigth << ", " 
-        << MatrConfig.JointSize << "} B{" << MatrConfig.JointSize 
-        << ", " << MatrConfig.Width << "}" << std::endl;
+      std::cout << "Matricies sizes: A{" << MatrConfig.Heigth << ", "
+                << MatrConfig.JointSize << "} B{" << MatrConfig.JointSize
+                << ", " << MatrConfig.Width << "}" << std::endl;
       continue;
-    } 
+    }
 
     if (Option == "--print") {
       MatrConfig.Print = true;

@@ -4,15 +4,14 @@
 // Thread block size
 constexpr size_t BlockSize = 16;
 
-__global__ void simpleMatMulKernel(DeviceMatrix A, 
-                                   DeviceMatrix B, 
+__global__ void simpleMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                    DeviceMatrix C) {
   auto Col = blockIdx.x * blockDim.y + threadIdx.x;
   auto Row = blockIdx.y * blockDim.x + threadIdx.y;
 
   if (Row >= A.Height || Col >= B.Width)
     return;
-  
+
   float Res = 0;
   for (size_t i = 0; i < A.Width; ++i)
     Res += A[Row][i] * B[i][Col];
@@ -42,23 +41,23 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
   return Res;
 }
 
-__device__ void fillTiles(size_t Iteration, Tile &ATile, 
-                          DeviceMatrix A, Tile &BTile,
-                          DeviceMatrix B) {
+__device__ void fillTiles(size_t Iteration, Tile &ATile, DeviceMatrix A,
+                          Tile &BTile, DeviceMatrix B) {
   assert(ATile.Size == BTile.Size);
   auto Size = ATile.Size;
-  auto CurTilePos = Iteration * Size;    // A.X == B.Y
+  auto CurTilePos = Iteration * Size; // A.X == B.Y
   ATile.X = CurTilePos;
   BTile.Y = CurTilePos;
-  ATile[threadIdx.y][threadIdx.x] = 0.0;                 // this needs to omit check in tile calc
-  BTile[threadIdx.y][threadIdx.x] = 0.0;                          
-  if (threadIdx.x + ATile.X < A.Width && 
-      threadIdx.y + ATile.Y < A.Height)
-    ATile[threadIdx.y][threadIdx.x] = A[ATile.Y + threadIdx.y][ATile.X + threadIdx.x];
-  
-  if (threadIdx.x + BTile.X < B.Width &&
-      threadIdx.y + BTile.Y < B.Height)
-    BTile[threadIdx.y][threadIdx.x] = B[BTile.Y + threadIdx.y][BTile.X + threadIdx.x];
+  ATile[threadIdx.y][threadIdx.x] =
+      0.0; // this needs to omit check in tile calc
+  BTile[threadIdx.y][threadIdx.x] = 0.0;
+  if (threadIdx.x + ATile.X < A.Width && threadIdx.y + ATile.Y < A.Height)
+    ATile[threadIdx.y][threadIdx.x] =
+        A[ATile.Y + threadIdx.y][ATile.X + threadIdx.x];
+
+  if (threadIdx.x + BTile.X < B.Width && threadIdx.y + BTile.Y < B.Height)
+    BTile[threadIdx.y][threadIdx.x] =
+        B[BTile.Y + threadIdx.y][BTile.X + threadIdx.x];
 }
 
 __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
@@ -68,7 +67,7 @@ __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
   __shared__ float ASharedMem[TileWidth * TileWidth];
   __shared__ float BSharedMem[TileWidth * TileWidth];
   auto ATile =
-      Tile{TileWidth, A.Width, /*X*/ 0u, blockIdx.y * TileWidth , ASharedMem};
+      Tile{TileWidth, A.Width, /*X*/ 0u, blockIdx.y * TileWidth, ASharedMem};
   auto BTile =
       Tile{TileWidth, B.Width, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
 
@@ -76,7 +75,7 @@ __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
   for (size_t i = 0; i < NumOfTiles; ++i) {
     fillTiles(i, ATile, A, BTile, B);
     __syncthreads();
-    
+
     for (size_t i = 0; i < TileWidth; ++i)
       Res += ATile[threadIdx.y][i] * BTile[i][threadIdx.x];
     __syncthreads();
