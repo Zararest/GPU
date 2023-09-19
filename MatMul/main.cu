@@ -66,7 +66,10 @@ void matMul(Config MatrConfig) {
   if (C.Elements.size() != RealC.Elements.size() ||
       !std::equal(C.Elements.begin(), C.Elements.end(), RealC.Elements.begin(),
                   [](float Lhs, float Rhs) {
-                    auto e = 0.001;
+                    auto e = Lhs * 0.0001;
+                    if (Rhs <= Lhs - e || Rhs >= Lhs + e)
+                      std::cout << "Differ: " << Lhs << " vs " 
+                        << Rhs << "\n\tdiff: " << Lhs - Rhs << std::endl;
                     return Rhs > Lhs - e && Rhs < Lhs + e;
                   })) {
     std::cout << "Wrong answer" << std::endl;

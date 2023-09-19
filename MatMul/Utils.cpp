@@ -3,11 +3,11 @@
 
 #include <random>
 
-#define MAX_FLOAT 1000
+#define MAX_FLOAT 10.0
 
 HostMatrix generate(size_t Height, size_t Width) {
   std::mt19937 Rng(4);
-  std::uniform_int_distribution<std::mt19937::result_type> Dist(1, MAX_FLOAT);
+  std::uniform_real_distribution<> Dist(1.0, MAX_FLOAT);
 
   auto Size = Height * Width;
   auto Res = HostMatrix{Height, Width};

@@ -1,8 +1,11 @@
+#include <chrono>
+#include <iostream>
+
 #include "Matrix.h"
 #include "Utils.h"
 
 // Thread block size
-constexpr size_t BlockSize = 16;
+constexpr size_t BlockSize = 32;
 
 __global__ void simpleMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                    DeviceMatrix C) {
@@ -31,8 +34,14 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
                     ceilDiv(A.Height, ThrBlockDim.y)};
   DEBUG_EXPR(std::cout << "Block grid: {" << BlockGridDim.x << ", "
                        << BlockGridDim.y << "}" << std::endl);
+  auto Start = std::chrono::steady_clock::now();
   simpleMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
+  DEBUG_EXPR(cudaDeviceSynchronize()); 
   checkKernelsExec();
+  auto End = std::chrono::steady_clock::now();
+  auto Duration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms" << std::endl);
 
   auto Res = DeviceMatrix::getHostMat(DevC);
   DevA.free();
@@ -102,9 +111,16 @@ HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
   dim3 ThrBlockDim{BlockSize, BlockSize};
   dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x),
                     ceilDiv(A.Height, ThrBlockDim.y)};
+
+  auto Start = std::chrono::steady_clock::now();
   tiledMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
-  //cudaDeviceSynchronize();
+  DEBUG_EXPR(cudaDeviceSynchronize());
   checkKernelsExec();
+  auto End = std::chrono::steady_clock::now();
+  auto Duration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms" << std::endl);
+
   DEBUG_EXPR(std::cout << "Tiled finished" << std::endl);
   auto Res = DeviceMatrix::getHostMat(DevC);
   DevA.free();
