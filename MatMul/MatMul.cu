@@ -48,8 +48,8 @@ __device__ void fillTiles(size_t Iteration, Tile &ATile, DeviceMatrix A,
   auto CurTilePos = Iteration * Size; // A.X == B.Y
   ATile.X = CurTilePos;
   BTile.Y = CurTilePos;
-  ATile[threadIdx.y][threadIdx.x] =
-      0.0; // this needs to omit check in tile calc
+  // this needs to omit check in tile calc
+  ATile[threadIdx.y][threadIdx.x] = 0.0;
   BTile[threadIdx.y][threadIdx.x] = 0.0;
   if (threadIdx.x + ATile.X < A.Width && threadIdx.y + ATile.Y < A.Height)
     ATile[threadIdx.y][threadIdx.x] =
@@ -62,15 +62,20 @@ __device__ void fillTiles(size_t Iteration, Tile &ATile, DeviceMatrix A,
 
 __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                   DeviceMatrix C) {
-  auto TileWidth = blockIdx.x;
+  constexpr auto TileWidth = BlockSize;
+  assert(TileWidth == blockDim.x);
+  assert(TileWidth == blockDim.y);
+  auto Col = blockIdx.x * blockDim.y + threadIdx.x;
+  auto Row = blockIdx.y * blockDim.x + threadIdx.y;
+
   auto NumOfTiles = ceilDiv(A.Width, blockDim.x);
   __shared__ float ASharedMem[TileWidth * TileWidth];
   __shared__ float BSharedMem[TileWidth * TileWidth];
   auto ATile =
-      Tile{TileWidth, A.Width, /*X*/ 0u, blockIdx.y * TileWidth, ASharedMem};
+      Tile{TileWidth, /*X*/ 0u, blockIdx.y * TileWidth, ASharedMem};
   auto BTile =
-      Tile{TileWidth, B.Width, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
-
+      Tile{TileWidth, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
+  
   auto Res = 0.0;
   for (size_t i = 0; i < NumOfTiles; ++i) {
     fillTiles(i, ATile, A, BTile, B);
@@ -80,7 +85,11 @@ __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
       Res += ATile[threadIdx.y][i] * BTile[i][threadIdx.x];
     __syncthreads();
   }
-  C[threadIdx.y][threadIdx.x] = Res;
+
+  if (Row >= A.Height || Col >= B.Width)
+    return;
+
+  C[Row][Col] = Res;
 }
 
 HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
@@ -94,5 +103,12 @@ HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
   dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x),
                     ceilDiv(A.Height, ThrBlockDim.y)};
   tiledMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
+  //cudaDeviceSynchronize();
   checkKernelsExec();
+  DEBUG_EXPR(std::cout << "Tiled finished" << std::endl);
+  auto Res = DeviceMatrix::getHostMat(DevC);
+  DevA.free();
+  DevB.free();
+  DevC.free();
+  return Res;
 }

@@ -4,22 +4,47 @@
 #include "Matrix.h"
 #include "Utils.h"
 
+enum class MulType {
+  All,
+  WithoutShared,
+  Tiled
+};
+
 struct Config {
   bool CheckMat = false;
   bool Print = false;
+  MulType Type = MulType::All;
   size_t Heigth = 5, Width = 3, JointSize = 2;
 };
 
-void matMulWithoutShared(Config MatrConfig) {
+void matMul(Config MatrConfig) {
   auto A = generate(MatrConfig.Heigth, MatrConfig.JointSize);
   auto B = generate(MatrConfig.JointSize, MatrConfig.Width);
 
   auto Start = std::chrono::steady_clock::now();
-  auto C = simpleMatMul(A, B);
+  auto C = HostMatrix{1, 1};
+  auto TypeStr = std::string{"Unknown type"};
+
+  switch (MatrConfig.Type) {
+  case MulType::WithoutShared:
+    C = simpleMatMul(A, B); 
+    TypeStr = "WithoutShared";
+    break;
+
+  case MulType::Tiled:
+    C = tiledMatMul(A, B);
+    TypeStr = "Tiled matrix";
+    break;
+
+  default:
+    assert(false && "Unknown type");
+    break;
+  }
+
   auto End = std::chrono::steady_clock::now();
   auto Duration =
     std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  std::cout << "Without shared: " << Duration.count() << "ms" << std::endl;
+  std::cout << TypeStr << ": " << Duration.count() << "ms" << std::endl;
 
   if (MatrConfig.Print) {
     std::cout << "A:" << std::endl;
@@ -53,7 +78,6 @@ void matMulWithoutShared(Config MatrConfig) {
 }
 
 int main(int Argc, char **Argv) {
-  ;
   Argv++;
   Argc--;
   auto MatrConfig = Config{};
@@ -91,8 +115,27 @@ int main(int Argc, char **Argv) {
       continue;
     }
 
+    if (Option == "--tiled") {
+      MatrConfig.Type = MulType::Tiled;
+      continue;
+    }
+
+    if (Option == "--simple") {
+      MatrConfig.Type = MulType::WithoutShared;
+      continue;
+    }
+
     std::cout << "Unknown argument: " << Option << std::endl;
     assert(false);
   }
-  matMulWithoutShared(MatrConfig);
+
+  if (MatrConfig.Type == MulType::All) {
+    MatrConfig.Type = MulType::WithoutShared;
+    matMul(MatrConfig);
+    MatrConfig.Type = MulType::Tiled;
+    matMul(MatrConfig);
+    return 0;
+  }
+  
+  matMul(MatrConfig);
 }
