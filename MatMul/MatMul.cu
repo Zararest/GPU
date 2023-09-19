@@ -36,12 +36,13 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
                        << BlockGridDim.y << "}" << std::endl);
   auto Start = std::chrono::steady_clock::now();
   simpleMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
-  DEBUG_EXPR(cudaDeviceSynchronize()); 
+  DEBUG_EXPR(cudaDeviceSynchronize());
   checkKernelsExec();
   auto End = std::chrono::steady_clock::now();
   auto Duration =
-    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms" << std::endl);
+      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms"
+                       << std::endl);
 
   auto Res = DeviceMatrix::getHostMat(DevC);
   DevA.free();
@@ -80,11 +81,9 @@ __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
   auto NumOfTiles = ceilDiv(A.Width, blockDim.x);
   __shared__ float ASharedMem[TileWidth * TileWidth];
   __shared__ float BSharedMem[TileWidth * TileWidth];
-  auto ATile =
-      Tile{TileWidth, /*X*/ 0u, blockIdx.y * TileWidth, ASharedMem};
-  auto BTile =
-      Tile{TileWidth, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
-  
+  auto ATile = Tile{TileWidth, /*X*/ 0u, blockIdx.y * TileWidth, ASharedMem};
+  auto BTile = Tile{TileWidth, blockIdx.x * TileWidth, /*Y*/ 0u, BSharedMem};
+
   auto Res = 0.0;
   for (size_t i = 0; i < NumOfTiles; ++i) {
     fillTiles(i, ATile, A, BTile, B);
@@ -118,8 +117,9 @@ HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {
   checkKernelsExec();
   auto End = std::chrono::steady_clock::now();
   auto Duration =
-    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms" << std::endl);
+      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms"
+                       << std::endl);
 
   DEBUG_EXPR(std::cout << "Tiled finished" << std::endl);
   auto Res = DeviceMatrix::getHostMat(DevC);

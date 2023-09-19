@@ -109,26 +109,23 @@ class Tile {
     size_t TileSize = 0;
     float *RowPtr;
 
-    __device__  Proxy(size_t TileSize, float *RowPtr) : TileSize{TileSize}, 
-                                            RowPtr{RowPtr} {}
+    __device__ Proxy(size_t TileSize, float *RowPtr)
+        : TileSize{TileSize}, RowPtr{RowPtr} {}
 
-    __device__  float &operator[](size_t ColNum) {
+    __device__ float &operator[](size_t ColNum) {
       assert(ColNum < TileSize);
       return RowPtr[ColNum];
     }
   };
 
 public:
-  size_t Size = 0;      // size of the square tile
-  size_t X = 0;         // column of the tile
-  size_t Y = 0;         // row of the tile
-  float *Elements;      // elements of the real matrix
+  size_t Size = 0; // size of the square tile
+  size_t X = 0;    // column of the tile
+  size_t Y = 0;    // row of the tile
+  float *Elements; // elements of the real matrix
 
-  __device__  Tile(size_t Size,
-       size_t X, size_t Y, float *Elements) : Size{Size},
-                                              X{X},
-                                              Y{Y},
-                                              Elements{Elements} {}
+  __device__ Tile(size_t Size, size_t X, size_t Y, float *Elements)
+      : Size{Size}, X{X}, Y{Y}, Elements{Elements} {}
 
   __device__ Proxy operator[](size_t RowNum) {
     assert(RowNum < Size);

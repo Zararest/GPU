@@ -4,11 +4,7 @@
 #include "Matrix.h"
 #include "Utils.h"
 
-enum class MulType {
-  All,
-  WithoutShared,
-  Tiled
-};
+enum class MulType { All, WithoutShared, Tiled };
 
 struct Config {
   bool CheckMat = false;
@@ -27,7 +23,7 @@ void matMul(Config MatrConfig) {
 
   switch (MatrConfig.Type) {
   case MulType::WithoutShared:
-    C = simpleMatMul(A, B); 
+    C = simpleMatMul(A, B);
     TypeStr = "WithoutShared";
     break;
 
@@ -68,8 +64,8 @@ void matMul(Config MatrConfig) {
                   [](float Lhs, float Rhs) {
                     auto e = Lhs * 0.0001;
                     if (Rhs <= Lhs - e || Rhs >= Lhs + e)
-                      std::cout << "Differ: " << Lhs << " vs " 
-                        << Rhs << "\n\tdiff: " << Lhs - Rhs << std::endl;
+                      std::cout << "Differ: " << Lhs << " vs " << Rhs
+                                << "\n\tdiff: " << Lhs - Rhs << std::endl;
                     return Rhs > Lhs - e && Rhs < Lhs + e;
                   })) {
     std::cout << "Wrong answer" << std::endl;
@@ -139,6 +135,6 @@ int main(int Argc, char **Argv) {
     matMul(MatrConfig);
     return 0;
   }
-  
+
   matMul(MatrConfig);
 }
