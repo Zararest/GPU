@@ -9,13 +9,16 @@ constexpr size_t BlockSize = 16;
 
 __global__ void simpleMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                    DeviceMatrix C) {
-  float Cvalue = 0;
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    for (int e = 0; e < A.Width; ++e)
-        Cvalue += A[row][e]
-                * B[e][col];
-    C [row][col] = Cvalue;
+  auto Col = blockIdx.x * blockDim.y + threadIdx.x;
+  auto Row = blockIdx.y * blockDim.x + threadIdx.y;
+
+  if (Row >= A.Height || Col >= B.Width)
+    return;
+
+  float Res = 0;
+  for (size_t i = 0; i < A.Width; ++i)
+    Res += A.get(Row, i) * B.get(i, Col);
+  C.get(Row, Col) = Res;
 }
 
 HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
@@ -56,15 +59,15 @@ __device__ void fillTiles(size_t Iteration, Tile &ATile, DeviceMatrix A,
   ATile.X = CurTilePos;
   BTile.Y = CurTilePos;
   // this needs to omit check in tile calc
-  ATile[threadIdx.y][threadIdx.x] = 0.0;
-  BTile[threadIdx.y][threadIdx.x] = 0.0;
+  ATile.get(threadIdx.y, threadIdx.x) = 0.0;
+  BTile.get(threadIdx.y, threadIdx.x) = 0.0;
   if (threadIdx.x + ATile.X < A.Width && threadIdx.y + ATile.Y < A.Height)
-    ATile[threadIdx.y][threadIdx.x] =
-        A[ATile.Y + threadIdx.y][ATile.X + threadIdx.x];
+    ATile.get(threadIdx.y, threadIdx.x) =
+        A.get(ATile.Y + threadIdx.y, ATile.X + threadIdx.x);
 
   if (threadIdx.x + BTile.X < B.Width && threadIdx.y + BTile.Y < B.Height)
-    BTile[threadIdx.y][threadIdx.x] =
-        B[BTile.Y + threadIdx.y][BTile.X + threadIdx.x];
+    BTile.get(threadIdx.y, threadIdx.x) =
+        B.get(BTile.Y + threadIdx.y, BTile.X + threadIdx.x);
 }
 
 __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
@@ -87,14 +90,14 @@ __global__ void tiledMatMulKernel(DeviceMatrix A, DeviceMatrix B,
     __syncthreads();
 
     for (size_t i = 0; i < TileWidth; ++i)
-      Res += ATile[threadIdx.y][i] * BTile[i][threadIdx.x];
+      Res += ATile.get(threadIdx.y, i) * BTile.get(i, threadIdx.x);
     __syncthreads();
   }
 
   if (Row >= A.Height || Col >= B.Width)
     return;
 
-  C[Row][Col] = Res;
+  C.get(Row, Col) = Res;
 }
 
 HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B) {

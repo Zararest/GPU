@@ -5,7 +5,6 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 
-#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) (expr)

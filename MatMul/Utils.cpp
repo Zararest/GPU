@@ -22,7 +22,7 @@ HostMatrix referenceMul(HostMatrix &A, HostMatrix &B) {
   for (size_t Row = 0; Row < A.Height; ++Row)
     for (size_t Col = 0; Col < B.Width; ++Col)
       for (size_t k = 0; k < A.Width; ++k)
-        NewMatrix[Row][Col] += A[Row][k] * B[k][Col];
+        NewMatrix.get(Row, Col) += A.get(Row, k) * B.get(k, Col);
   return NewMatrix;
 }
 

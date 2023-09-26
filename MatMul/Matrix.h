@@ -9,21 +9,7 @@
 #include <iostream>
 #include <vector>
 
-class HostMatrix final {
-  struct Proxy {
-    std::vector<float>::iterator It;
-    size_t Width = 0;
-
-    Proxy(std::vector<float>::iterator It, size_t Width)
-        : It{It}, Width{Width} {}
-
-    float &operator[](size_t ColNum) {
-      assert(ColNum < Width);
-      return *(It + ColNum);
-    }
-  };
-
-public:
+struct HostMatrix final {
   size_t Width = 0;
   size_t Height = 0;
   std::vector<float> Elements;
@@ -31,35 +17,22 @@ public:
   HostMatrix(size_t Height, size_t Width)
       : Width{Width}, Height{Height}, Elements(Height * Width) {}
 
-  Proxy operator[](size_t RowNum) {
-    assert(RowNum < Height);
-    return Proxy{Elements.begin() + RowNum * Width, Width};
+  inline float &get(size_t RowNum, size_t ColNum) {
+    DEBUG_EXPR(assert(RowNum < Height));
+    DEBUG_EXPR(assert(ColNum < Width));
+    return Elements[RowNum * Width + ColNum];
   }
 
   void print(std::ostream &S) {
     for (size_t i = 0; i < Height; ++i) {
       for (size_t j = 0; j < Width; ++j)
-        std::cout << (*this)[i][j] << " ";
+        std::cout << get(i, j) << " ";
       std::cout << std::endl;
     }
   }
 };
 
-class DeviceMatrix final {
-  struct Proxy {
-    float *RowPtr;
-    size_t Width = 0;
-
-    __device__ Proxy(float *RowPtr, size_t Width)
-        : RowPtr{RowPtr}, Width{Width} {}
-
-    __device__ float &operator[](size_t ColNum) {
-      assert(ColNum < Width);
-      return RowPtr[ColNum];
-    }
-  };
-
-public:
+struct DeviceMatrix final {
   size_t Width = 0;
   size_t Height = 0;
   float *Elements;
@@ -98,27 +71,14 @@ public:
     return HostMat;
   }
 
-  __device__ Proxy operator[](size_t RowNum) {
-    assert(RowNum < Height);
-    return {Elements + RowNum * Width, Width};
+  __device__ inline float &get(size_t RowNum, size_t ColNum) {
+    DEBUG_EXPR(assert(RowNum < Height));
+    DEBUG_EXPR(assert(ColNum < Width));
+    return Elements[RowNum * Width + ColNum];
   }
 };
 
-class Tile {
-  struct Proxy {
-    size_t TileSize = 0;
-    float *RowPtr;
-
-    __device__ Proxy(size_t TileSize, float *RowPtr)
-        : TileSize{TileSize}, RowPtr{RowPtr} {}
-
-    __device__ float &operator[](size_t ColNum) {
-      assert(ColNum < TileSize);
-      return RowPtr[ColNum];
-    }
-  };
-
-public:
+struct Tile {
   size_t Size = 0; // size of the square tile
   size_t X = 0;    // column of the tile
   size_t Y = 0;    // row of the tile
@@ -127,10 +87,10 @@ public:
   __device__ Tile(size_t Size, size_t X, size_t Y, float *Elements)
       : Size{Size}, X{X}, Y{Y}, Elements{Elements} {}
 
-  __device__ Proxy operator[](size_t RowNum) {
-    assert(RowNum < Size);
-    auto RowPtr = Elements + RowNum * Size;
-    return Proxy{Size, RowPtr};
+  __device__ inline float &get(size_t RowNum, size_t ColNum) {
+    DEBUG_EXPR(assert(RowNum < Size));
+    DEBUG_EXPR(assert(ColNum < Size));
+    return Elements[RowNum * Size + ColNum];
   }
 };
 
