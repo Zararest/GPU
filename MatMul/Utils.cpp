@@ -12,7 +12,7 @@ HostMatrix generate(size_t Height, size_t Width) {
   auto Size = Height * Width;
   auto Res = HostMatrix{Height, Width};
   for (auto &It : Res.Elements)
-    It = static_cast<float>(Dist(Rng)) / static_cast<float>(Dist(Rng));
+    It = Dist(Rng);
   return Res;
 }
 

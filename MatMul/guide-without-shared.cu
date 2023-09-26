@@ -1,3 +1,6 @@
+#include <chrono>
+#include <iostream>
+
 // Matrices are stored in row-major order:
 // M(row, col) = *(M.elements + row * M.width + col)
 typedef struct {
@@ -39,6 +42,8 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     // Invoke kernel
     dim3 dimBlock(BlockSize, BlockSize);
     dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
+    std::cout << "Block grid: {" << dimGrid.x << ", "
+                       << dimGrid.y << "}" << std::endl;
     MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 
     // Read C from device memory
@@ -63,4 +68,20 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
         Cvalue += A.elements[row * A.width + e]
                 * B.elements[e * B.width + col];
     C.elements[row * C.width + col] = Cvalue;
+}
+
+int main() {
+    size_t Heigth = 4096;
+    size_t Width = 4096;
+    size_t JointSize = 4096; 
+    Matrix A{Heigth, JointSize, new float[Heigth * JointSize]};
+    Matrix B{JointSize, Width, new float[Width * JointSize]};
+    Matrix C{Heigth, Width, new float[Width * Heigth]};
+   
+    auto Start = std::chrono::steady_clock::now();
+    MatMul(A, B, C);
+    auto End = std::chrono::steady_clock::now();
+    auto Duration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+    std::cout << "Without shared:" << ": " << Duration.count() << "ms" << std::endl;
 }

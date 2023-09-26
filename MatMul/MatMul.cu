@@ -5,20 +5,17 @@
 #include "Utils.h"
 
 // Thread block size
-constexpr size_t BlockSize = 32;
+constexpr size_t BlockSize = 16;
 
 __global__ void simpleMatMulKernel(DeviceMatrix A, DeviceMatrix B,
                                    DeviceMatrix C) {
-  auto Col = blockIdx.x * blockDim.y + threadIdx.x;
-  auto Row = blockIdx.y * blockDim.x + threadIdx.y;
-
-  if (Row >= A.Height || Col >= B.Width)
-    return;
-
-  float Res = 0;
-  for (size_t i = 0; i < A.Width; ++i)
-    Res += A[Row][i] * B[i][Col];
-  C[Row][Col] = Res;
+  float Cvalue = 0;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    for (int e = 0; e < A.Width; ++e)
+        Cvalue += A[row][e]
+                * B[e][col];
+    C [row][col] = Cvalue;
 }
 
 HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {

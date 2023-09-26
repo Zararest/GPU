@@ -6,6 +6,12 @@ add_executable(MatMul
                main.cu
                Utils.cpp
                MatMul.cu)
+          
+add_executable(Example-shared
+               guide-with-shared.cu)       
+               
+add_executable(Example-simple
+               guide-without-shared.cu)
 
 target_compile_features(MatMul PUBLIC cxx_std_11)
 
