@@ -44,7 +44,15 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
     std::cout << "Block grid: {" << dimGrid.x << ", "
                        << dimGrid.y << "}" << std::endl;
+
+    auto Start = std::chrono::steady_clock::now();
     MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
+    cudaDeviceSynchronize();
+    auto End = std::chrono::steady_clock::now();
+    auto Duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+    std::cout << "\tKernel duration: " << Duration.count() << "ms"
+                        << std::endl;
 
     // Read C from device memory
     cudaMemcpy(C.elements, d_C.elements, size,

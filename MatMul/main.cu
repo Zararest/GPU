@@ -4,7 +4,7 @@
 #include "Matrix.h"
 #include "Utils.h"
 
-enum class MulType { All, WithoutShared, Tiled };
+enum class MulType { All, WithoutShared, Tiled, TransposeTiled };
 
 struct Config {
   bool CheckMat = false;
@@ -24,12 +24,17 @@ void matMul(Config MatrConfig) {
   switch (MatrConfig.Type) {
   case MulType::WithoutShared:
     C = simpleMatMul(A, B);
-    TypeStr = "WithoutShared";
+    TypeStr = "Without shared";
     break;
 
   case MulType::Tiled:
     C = tiledMatMul(A, B);
     TypeStr = "Tiled matrix";
+    break;
+
+  case MulType::TransposeTiled:
+    C = transposeTiledMatMul(A, B);
+    TypeStr = "Transpose tiled matrix";
     break;
 
   default:
@@ -69,6 +74,8 @@ void matMul(Config MatrConfig) {
                     return Rhs > Lhs - e && Rhs < Lhs + e;
                   })) {
     std::cout << "Wrong answer" << std::endl;
+    if (!MatrConfig.Print)
+      return;
     std::cout << "Real:" << std::endl;
     RealC.print(std::cout);
     std::cout << "My:" << std::endl;
@@ -124,6 +131,11 @@ int main(int Argc, char **Argv) {
       continue;
     }
 
+    if (Option == "--transposed") {
+      MatrConfig.Type = MulType::TransposeTiled;
+      continue;
+    }
+
     std::cout << "Unknown argument: " << Option << std::endl;
     assert(false);
   }
@@ -132,6 +144,8 @@ int main(int Argc, char **Argv) {
     MatrConfig.Type = MulType::WithoutShared;
     matMul(MatrConfig);
     MatrConfig.Type = MulType::Tiled;
+    matMul(MatrConfig);
+    MatrConfig.Type = MulType::TransposeTiled;
     matMul(MatrConfig);
     return 0;
   }

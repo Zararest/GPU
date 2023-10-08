@@ -1,8 +1,8 @@
 #include <chrono>
 #include <iostream>
 
-#include "Utils.h"
-#include "Matrix.h"
+#include "../Utils.h"
+#include "../Matrix.h"
 
 #define BLOCK_SIZE 32
 

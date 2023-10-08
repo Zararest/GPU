@@ -5,13 +5,15 @@ project(Example LANGUAGES CXX CUDA)
 add_executable(MatMul 
                main.cu
                Utils.cpp
-               MatMul.cu)
+               Mat-mul-simple.cu
+               Mat-mul-tiled.cu
+               Mat-mul-tiled-transpose.cu)
           
 add_executable(Example-shared
-               guide-with-shared.cu)       
+               cuda-guide/with-shared.cu)       
                
 add_executable(Example-simple
-               guide-without-shared.cu)
+               cuda-guide/without-shared.cu)
 
 target_compile_features(MatMul PUBLIC cxx_std_11)
 

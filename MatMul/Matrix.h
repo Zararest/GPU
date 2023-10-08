@@ -9,6 +9,9 @@
 #include <iostream>
 #include <vector>
 
+// Thread block size
+constexpr size_t BlockSize = 16;
+
 struct HostMatrix final {
   size_t Width = 0;
   size_t Height = 0;
@@ -32,12 +35,12 @@ struct HostMatrix final {
   }
 };
 
-struct DeviceMatrix final {
+struct DevMatRowMajor final {
   size_t Width = 0;
   size_t Height = 0;
   float *Elements;
 
-  __host__ DeviceMatrix(const HostMatrix &HMat)
+  __host__ DevMatRowMajor(const HostMatrix &HMat)
       : Width{HMat.Width}, Height{HMat.Height} {
     auto Size = Width * Height * sizeof(float);
     CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
@@ -45,7 +48,7 @@ struct DeviceMatrix final {
                           cudaMemcpyHostToDevice));
   }
 
-  __host__ DeviceMatrix(size_t Height, size_t Width)
+  __host__ DevMatRowMajor(size_t Height, size_t Width)
       : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
     cudaMalloc((void **)&Elements, Size);
@@ -53,13 +56,13 @@ struct DeviceMatrix final {
 
   __host__ void free() { CUDA_CHECK(cudaFree(Elements)); }
 
-  __host__ __device__ static bool checkMul(const DeviceMatrix &A,
-                                           const DeviceMatrix &B,
-                                           const DeviceMatrix &C) {
+  __host__ __device__ static bool checkMul(const DevMatRowMajor &A,
+                                           const DevMatRowMajor &B,
+                                           const DevMatRowMajor &C) {
     return A.Width == B.Height && C.Height == A.Height && C.Width == B.Width;
   }
 
-  __host__ static HostMatrix getHostMat(const DeviceMatrix &DevMat) {
+  __host__ static HostMatrix getHostMat(const DevMatRowMajor &DevMat) {
     HostMatrix HostMat{DevMat.Height, DevMat.Width};
     auto SizeInFloat = DevMat.Width * DevMat.Height;
     auto *Buf = new float[SizeInFloat];
@@ -75,6 +78,36 @@ struct DeviceMatrix final {
     DEBUG_EXPR(assert(RowNum < Height));
     DEBUG_EXPR(assert(ColNum < Width));
     return Elements[RowNum * Width + ColNum];
+  }
+};
+
+class DevMatColMajor final {
+  __host__ static void transposeHost(HostMatrix &Mat) {
+    for (size_t X = 0; X < Mat.Width; ++X)
+      for (size_t Y = X; Y < Mat.Height; ++Y)
+        std::swap(Mat.get(X, Y), Mat.get(Y, X));
+  }
+
+public:
+  size_t Width = 0;
+  size_t Height = 0;
+  float *Elements;
+
+  __host__ DevMatColMajor(HostMatrix HMat)
+      : Width{HMat.Width}, Height{HMat.Height} {
+    transposeHost(HMat);
+    auto Size = Width * Height * sizeof(float);
+    CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
+    CUDA_CHECK(cudaMemcpy(Elements, HMat.Elements.data(), Size,
+                          cudaMemcpyHostToDevice));
+  }
+
+  __host__ void free() { CUDA_CHECK(cudaFree(Elements)); }
+
+  __device__ inline float &get(size_t RowNum, size_t ColNum) {
+    DEBUG_EXPR(assert(RowNum < Height));
+    DEBUG_EXPR(assert(ColNum < Width));
+    return Elements[ColNum * Height + RowNum];
   }
 };
 
@@ -94,5 +127,6 @@ struct Tile {
   }
 };
 
+HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B);
 HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B);
 HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B);
