@@ -53,7 +53,7 @@ __global__ void transposedTileMatMulKernel(DevMatRowMajor A, DevMatColMajor B,
   C.get(Row, Col) = Res;
 }
 
-HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B) {
+HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B, bool PrintTime) {
   DevMatRowMajor DevA{A};
   DevMatColMajor DevB{B};
   DevMatRowMajor DevC{A.Height, B.Width};
@@ -69,8 +69,10 @@ HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B) {
   auto End = std::chrono::steady_clock::now();
   auto Duration =
       std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  std::cout << "\tKernel duration: " << Duration.count() << "ms"
-                       << std::endl;
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms"
+                       << std::endl);
+  if (PrintTime)
+    std::cout << Duration.count();
 
   DEBUG_EXPR(std::cout << "Tiled finished" << std::endl);
   auto Res = DevMatRowMajor::getHostMat(DevC);

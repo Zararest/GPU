@@ -18,7 +18,7 @@ __global__ void simpleMatMulKernel(DevMatRowMajor A, DevMatRowMajor B,
   C.get(Row, Col) = Res;
 }
 
-HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
+HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B, bool PrintTime) {
   DevMatRowMajor DevA{A};
   DevMatRowMajor DevB{B};
   DevMatRowMajor DevC{A.Height, B.Width};
@@ -29,8 +29,8 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
   // matrix may be bigger than BlockSize, so
   dim3 BlockGridDim{ceilDiv(B.Width, ThrBlockDim.x),
                     ceilDiv(A.Height, ThrBlockDim.y)};
-  std::cout << "Block grid: {" << BlockGridDim.x << ", "
-                       << BlockGridDim.y << "}" << std::endl;
+  DEBUG_EXPR(std::cout << "Block grid: {" << BlockGridDim.x << ", "
+                       << BlockGridDim.y << "}" << std::endl);
   auto Start = std::chrono::steady_clock::now();
   simpleMatMulKernel<<<BlockGridDim, ThrBlockDim>>>(DevA, DevB, DevC);
   cudaDeviceSynchronize();
@@ -38,8 +38,10 @@ HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B) {
   auto End = std::chrono::steady_clock::now();
   auto Duration =
       std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  std::cout << "\tKernel duration: " << Duration.count() << "ms"
-                       << std::endl;
+  DEBUG_EXPR(std::cout << "\tKernel duration: " << Duration.count() << "ms"
+                       << std::endl);
+  if (PrintTime)
+    std::cout << Duration.count();
 
   auto Res = DevMatRowMajor::getHostMat(DevC);
   DevA.free();

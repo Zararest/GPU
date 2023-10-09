@@ -9,6 +9,7 @@ enum class MulType { All, WithoutShared, Tiled, TransposeTiled };
 struct Config {
   bool CheckMat = false;
   bool Print = false;
+  bool PrintOnlyTime = false;
   MulType Type = MulType::All;
   size_t Heigth = 5, Width = 3, JointSize = 2;
 };
@@ -23,17 +24,17 @@ void matMul(Config MatrConfig) {
 
   switch (MatrConfig.Type) {
   case MulType::WithoutShared:
-    C = simpleMatMul(A, B);
+    C = simpleMatMul(A, B, MatrConfig.PrintOnlyTime);
     TypeStr = "Without shared";
     break;
 
   case MulType::Tiled:
-    C = tiledMatMul(A, B);
+    C = tiledMatMul(A, B, MatrConfig.PrintOnlyTime);
     TypeStr = "Tiled matrix";
     break;
 
   case MulType::TransposeTiled:
-    C = transposeTiledMatMul(A, B);
+    C = transposeTiledMatMul(A, B, MatrConfig.PrintOnlyTime);
     TypeStr = "Transpose tiled matrix";
     break;
 
@@ -45,7 +46,9 @@ void matMul(Config MatrConfig) {
   auto End = std::chrono::steady_clock::now();
   auto Duration =
     std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
-  std::cout << TypeStr << ": " << Duration.count() << "ms" << std::endl;
+  
+  if (!MatrConfig.PrintOnlyTime)
+    std::cout << TypeStr << ": " << Duration.count() << "ms" << std::endl;
 
   if (MatrConfig.Print) {
     std::cout << "A:" << std::endl;
@@ -104,9 +107,6 @@ int main(int Argc, char **Argv) {
       MatrConfig.JointSize = std::stoi(Argv[2]);
       Argv += 3;
       Argc -= 3;
-      std::cout << "Matricies sizes: A{" << MatrConfig.Heigth << ", "
-                << MatrConfig.JointSize << "} B{" << MatrConfig.JointSize
-                << ", " << MatrConfig.Width << "}" << std::endl;
       continue;
     }
 
@@ -136,8 +136,20 @@ int main(int Argc, char **Argv) {
       continue;
     }
 
+    if (Option == "--print-only-time") {
+      MatrConfig.PrintOnlyTime = true;
+      continue;
+    }
+
     std::cout << "Unknown argument: " << Option << std::endl;
     assert(false);
+  }
+
+
+  if (!MatrConfig.PrintOnlyTime) {
+    std::cout << "Matricies sizes: A{" << MatrConfig.Heigth << ", "
+              << MatrConfig.JointSize << "} B{" << MatrConfig.JointSize
+              << ", " << MatrConfig.Width << "}" << std::endl;
   }
 
   if (MatrConfig.Type == MulType::All) {

@@ -127,6 +127,6 @@ struct Tile {
   }
 };
 
-HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B);
-HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B);
-HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B);
+HostMatrix transposeTiledMatMul(const HostMatrix &A, const HostMatrix &B, bool PrintTime);
+HostMatrix tiledMatMul(const HostMatrix &A, const HostMatrix &B, bool PrintTime);
+HostMatrix simpleMatMul(const HostMatrix &A, const HostMatrix &B, bool PrintTime);
