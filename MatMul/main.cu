@@ -4,7 +4,7 @@
 #include "Matrix.h"
 #include "Utils.h"
 
-enum class MulType { All, WithoutShared, Tiled, TransposeTiled };
+enum class MulType { All, WithoutShared, Tiled, TransposeTiled, TiledInt };
 
 struct Config {
   bool CheckMat = false;
@@ -13,6 +13,23 @@ struct Config {
   MulType Type = MulType::All;
   size_t Heigth = 5, Width = 3, JointSize = 2;
 };
+
+void intMatMul(Config MatrConfig) {
+  auto A = generateInt(MatrConfig.Heigth, MatrConfig.JointSize);
+  auto B = generateInt(MatrConfig.JointSize, MatrConfig.Width);
+
+  auto Start = std::chrono::steady_clock::now();
+  auto C = HostMatrixInt{1, 1};
+
+  C = tiledMatMulInt(A, B, MatrConfig.PrintOnlyTime);
+
+  auto End = std::chrono::steady_clock::now();
+  auto Duration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+  
+  if (!MatrConfig.PrintOnlyTime)
+    std::cout << "Tiled integer:" << ": " << Duration.count() << "ms" << std::endl;
+}
 
 void matMul(Config MatrConfig) {
   auto A = generate(MatrConfig.Heigth, MatrConfig.JointSize);
@@ -126,6 +143,11 @@ int main(int Argc, char **Argv) {
       continue;
     }
 
+    if (Option == "--tiled-integer") {
+      MatrConfig.Type = MulType::TiledInt;
+      continue;
+    }
+
     if (Option == "--simple") {
       MatrConfig.Type = MulType::WithoutShared;
       continue;
@@ -159,6 +181,12 @@ int main(int Argc, char **Argv) {
     matMul(MatrConfig);
     MatrConfig.Type = MulType::TransposeTiled;
     matMul(MatrConfig);
+    intMatMul(MatrConfig);
+    return 0;
+  }
+
+  if (MatrConfig.Type == MulType::TiledInt) {
+    intMatMul(MatrConfig);
     return 0;
   }
 

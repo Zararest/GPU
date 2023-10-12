@@ -4,6 +4,7 @@
 #include <random>
 
 #define MAX_FLOAT 10.0
+#define MAX_INT 100
 
 HostMatrix generate(size_t Height, size_t Width) {
   std::mt19937 Rng(4);
@@ -11,6 +12,17 @@ HostMatrix generate(size_t Height, size_t Width) {
 
   auto Size = Height * Width;
   auto Res = HostMatrix{Height, Width};
+  for (auto &It : Res.Elements)
+    It = Dist(Rng);
+  return Res;
+}
+
+HostMatrixInt generateInt(size_t Height, size_t Width) {
+  std::mt19937 Rng(4);
+  std::uniform_int_distribution<> Dist(1.0, MAX_INT);
+
+  auto Size = Height * Width;
+  auto Res = HostMatrixInt{Height, Width};
   for (auto &It : Res.Elements)
     It = Dist(Rng);
   return Res;

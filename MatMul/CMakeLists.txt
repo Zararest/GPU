@@ -7,7 +7,8 @@ add_executable(MatMul
                Utils.cpp
                Mat-mul-simple.cu
                Mat-mul-tiled.cu
-               Mat-mul-tiled-transpose.cu)
+               Mat-mul-tiled-transpose.cu
+               Mat-mul-tiled-int.cu)
           
 add_executable(Example-shared
                cuda-guide/with-shared.cu)       
