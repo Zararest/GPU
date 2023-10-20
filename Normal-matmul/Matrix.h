@@ -1,0 +1,150 @@
+#pragma once
+
+#include "Utils.h"
+
+#include <algorithm>
+#include <cassert>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <vector>
+
+namespace host {
+
+template <typename T>
+class Matrix {
+  size_t Width = 0;
+  size_t Height = 0;
+  std::vector<T> Elements;
+
+  class Proxy {
+    std::vector<T> &Elems;
+    size_t Width = 0;
+    size_t RowNum = 0;
+
+  public:
+    __device__
+    Proxy(size_t RowNum, size_t Width, std::vector<T> &Elems) 
+        : Elems{Elems}, Width{Width}, RowNum{RowNum} {}
+
+    __device__
+    T &operator [](size_t Col) {
+      DEBUG_EXPR(assert(Col < Width));
+      return Elems[RowNum * Width + Col];
+    }
+  };
+
+public:
+  __host__
+  Matrix(size_t Height, size_t Width)
+      : Width{Width}, Height{Height}, Elements(Height * Width) {}
+
+  template <typename It>
+  Matrix(It Beg, It End, size_t Height, size_t Width) 
+      : Width{Width}, Height{Height}, Elements{Beg, End} {}
+
+  __device__
+  Proxy operator [](size_t Row) {
+    DEBUG_EXPR(assert(Row < Height));
+    return Proxy{Row, Width, Elements};
+  }
+
+  const T *data() const {
+    return Elements.data();
+  }
+
+  size_t w() const {
+    return Width;
+  }
+
+  size_t h() const {
+    return Height;
+  }
+};
+} // namespace host
+
+namespace device {
+
+template <typename T>
+class Matrix {
+  size_t Width = 0;
+  size_t Height = 0;
+  T *Elements;
+
+  class Proxy {
+    T *RowElems;
+    size_t Width = 0;
+
+  public:
+    __device__
+    Proxy(size_t Width, T *RowElems) : RowElems{RowElems}, Width{Width} {}
+
+    __device__
+    T &operator [](size_t Col) {
+      DEBUG_EXPR(assert(Col < Width));
+      return RowElems[Col];
+    }
+  };
+
+public:
+  __host__
+  Matrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
+    auto Size = Width * Height * sizeof(float);
+    CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
+  }
+
+  __host__
+  Matrix(const host::Matrix<T> &HostMat) : Width{HostMat.w()}, Height{HostMat.h()} {
+    auto Size = Width * Height * sizeof(T);
+    CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
+    CUDA_CHECK(cudaMemcpy(Elements, HostMat.data(), Size,
+                          cudaMemcpyHostToDevice));
+  }
+
+  __host__ 
+  void free() { CUDA_CHECK(cudaFree(Elements)); }
+
+  __host__
+  host::Matrix<T> getHostMatrix() const {
+    auto SizeInType = Width * Height;
+    auto *Buf = new T[SizeInType];
+    CUDA_CHECK(cudaMemcpy(Buf, Elements, SizeInType * sizeof(T),
+                          cudaMemcpyDeviceToHost));
+    auto HostMat = host::Matrix<T>{Buf, Buf + SizeInType, 
+                                Height, Width};
+    delete[] Buf;
+    return HostMat;
+  }
+
+  __device__
+  Proxy operator[](size_t Row) {
+    DEBUG_EXPR(assert(Row < Height));
+    return Proxy{Width, Elements + Row * Width};
+  }
+
+  __device__
+  size_t w() const {
+    return Width;
+  }
+
+  __device__
+  size_t h() const {
+    return Height;
+  }
+
+  class Tile {
+    size_t Size = 0;
+    T *Elements;
+
+  public:
+    __device__
+    Tile(size_t Size, T *Elements) : Size{Size}, Elements{Elements} {}
+
+    __device__
+    Proxy operator[](size_t Row) {
+      DEBUG_EXPR(assert(Row < Size));
+      return Proxy{Size, Elements + Row * Size};
+    }
+  };
+};
+} // namespace device
+
