@@ -7,6 +7,7 @@ add_executable(MatMul
                Utils)
           
 target_compile_features(MatMul PUBLIC cxx_std_11)
+target_include_directories(MatMul PUBLIC include/)
 
 set_target_properties(MatMul
                       PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

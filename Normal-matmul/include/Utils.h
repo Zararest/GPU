@@ -31,3 +31,20 @@ __device__ __host__ size_t ceilDiv(T1 Lhs, T2 Rhs) {
   auto RhsF = static_cast<float>(Rhs);
   return ceil(LhsF / RhsF);
 }
+
+template <typename It>
+class IteratorRange {
+  It Begin;
+  It End;
+
+public:
+  IteratorRange(It Begin, It End) : Begin{Begin}, End{End} {}
+
+  It begin() { return Begin; }
+  It end() { return End; }
+};
+
+template <typename It>
+IteratorRange<It> makeRange(It Begin, It End) {
+  return IteratorRange<It>{Begin, End};
+}

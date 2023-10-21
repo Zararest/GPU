@@ -7,11 +7,14 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <vector>
+#include <chrono>
 
 namespace host {
 
 template <typename T>
 class Matrix {
+  using It = typename std::vector<T>::iterator;
+
   size_t Width = 0;
   size_t Height = 0;
   std::vector<T> Elements;
@@ -22,11 +25,11 @@ class Matrix {
     size_t RowNum = 0;
 
   public:
-    __device__
+    __host__
     Proxy(size_t RowNum, size_t Width, std::vector<T> &Elems) 
         : Elems{Elems}, Width{Width}, RowNum{RowNum} {}
 
-    __device__
+    __host__
     T &operator [](size_t Col) {
       DEBUG_EXPR(assert(Col < Width));
       return Elems[RowNum * Width + Col];
@@ -39,27 +42,48 @@ public:
       : Width{Width}, Height{Height}, Elements(Height * Width) {}
 
   template <typename It>
+  __host__
   Matrix(It Beg, It End, size_t Height, size_t Width) 
       : Width{Width}, Height{Height}, Elements{Beg, End} {}
 
-  __device__
+  __host__
   Proxy operator [](size_t Row) {
     DEBUG_EXPR(assert(Row < Height));
     return Proxy{Row, Width, Elements};
   }
 
+   __host__
   const T *data() const {
     return Elements.data();
   }
 
+   __host__
+  It begin() {
+    return Elements.begin();
+  }
+
+   __host__
+  It end() {
+    return Elements.end();
+  }
+
+   __host__
   size_t w() const {
     return Width;
   }
 
+   __host__
   size_t h() const {
     return Height;
   }
 };
+
+template <typename T>
+struct MatMulResult {
+  Matrix<T> Matr;
+  std::chrono::duration<long, std::milli> Duration;
+};
+
 } // namespace host
 
 namespace device {
@@ -147,4 +171,3 @@ public:
   };
 };
 } // namespace device
-

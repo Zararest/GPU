@@ -1,8 +1,6 @@
 #include "Matrix.h"
 #include "Utils.h"
 
-#include <chrono>
-
 template <typename T>
 using Tile_t = typename device::Matrix<T>::Tile; 
 
@@ -57,14 +55,8 @@ void __tiledMatMul(device::Matrix<T> A, device::Matrix<T> B,
   C[Row][Col] = Res;
 }
 
-template <typename T>
-struct MatMulResult {
-  host::Matrix<T> Matr;
-  std::chrono::duration<long, std::milli> Duration;
-};
-
 template <typename T, int BlockSize>
-MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T> &B) {
+host::MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T> &B) {
   auto A_d = device::Matrix<T>{A};
   auto B_d = device::Matrix<T>{B};
   auto C_d = device::Matrix<T>{A.h(), B.w()};
@@ -81,7 +73,7 @@ MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T> &B) 
   auto End = std::chrono::steady_clock::now();
 
   auto Res = 
-    MatMulResult<T>{C_d.getHostMatrix(), 
+    host::MatMulResult<T>{C_d.getHostMatrix(), 
       std::chrono::duration_cast<std::chrono::milliseconds>(End - Start)};
   A_d.free();
   B_d.free();
