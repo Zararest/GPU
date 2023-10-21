@@ -13,6 +13,8 @@ constexpr size_t BlockSize = 16;
 struct Config {
   bool CheckMat = false;
   bool PrintOnlyTime = false;
+  bool TimeWithoutCopy = false;
+  bool Print = false;
   MulType Type = MulType::Tiled;
   size_t Heigth = 5, Width = 3, JointSize = 2;
 };
@@ -25,24 +27,40 @@ void matMul(Config MatrConfig) {
   auto B = host::generate<T>(MatrConfig.JointSize, MatrConfig.Width);
 
   auto Start = std::chrono::steady_clock::now();
-  auto Res = std::unique_ptr<MatMulRes>(nullptr);
-  auto TypeStr = std::string{"Unknown type"};
+  auto Res = MatMulRes{host::Matrix<T>{1, 1}, 0};
 
   switch (MatrConfig.Type) {
   case MulType::CPU:
-    Res = std::unique_ptr<MatMulRes>(host::matMul<T>(A, B));
-    TypeStr = "Without shared";
+    Res = host::matMul<T>(A, B);
     break;
 
   case MulType::Tiled:
-    Res = std::unique_ptr<MatMulRes>(tiledMatMul<T, BlockSize>(A, B));
-    TypeStr = "Tiled matrix";
+    Res = tiledMatMul<T, BlockSize>(A, B);
     break;
 
   default:
     assert(false && "Unknown type");
     break;
   }
+
+  auto End = std::chrono::steady_clock::now();
+  auto FullDuration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start);
+
+  auto Duration = MatrConfig.TimeWithoutCopy ? Res.DurationMs :
+                                               FullDuration.count();
+  
+  if (MatrConfig.CheckMat && !check(A, B, Res.Matr)) {
+    std::cout << "Wrong answer" << std::endl;
+    return;
+  }
+
+  if (MatrConfig.PrintOnlyTime) {
+    std::cout << Duration;
+    return;
+  }
+
+  std::cout << "Multiplication time:" << Duration << "ms" << std::endl;
 }
 
 int main(int Argc, char **Argv) {
@@ -74,7 +92,7 @@ int main(int Argc, char **Argv) {
     }
 
     if (Option == "--params") {
-      printDeviceLimits(std::cout);
+      utils::printDeviceLimits(std::cout);
       continue;
     }
 
@@ -100,11 +118,11 @@ int main(int Argc, char **Argv) {
     std::cout << "Mult type: ";
     switch (MatrConfig.Type) {
     case MulType::CPU:
-      std::cout << "on CPU";
+      std::cout << "on CPU" << std::endl;
       break;
     
     case MulType::Tiled:
-      std::cout << "tiled on GPU";
+      std::cout << "tiled on GPU" << std::endl;
       break;
     
     default:

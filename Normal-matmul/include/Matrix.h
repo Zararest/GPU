@@ -81,7 +81,7 @@ public:
 template <typename T>
 struct MatMulResult {
   Matrix<T> Matr;
-  std::chrono::duration<long, std::milli> Duration;
+  long DurationMs;
 };
 
 } // namespace host

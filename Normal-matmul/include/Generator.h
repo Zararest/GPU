@@ -4,6 +4,7 @@
 #include "Utils.h"
 
 #include <random>
+#
 
 namespace host {
 
@@ -20,7 +21,7 @@ Matrix<float> generate(size_t Height, size_t Width) {
   std::uniform_real_distribution<> Dist(0.1, MaxFloat);
 
   auto Res = Matrix<float>{Height, Width};
-  for (auto &It : makeRange(Res.begin(), Res.end()))
+  for (auto &It : utils::makeRange(Res.begin(), Res.end()))
     It = Dist(Rng);
   return Res;
 }
@@ -31,7 +32,7 @@ Matrix<int> generate(size_t Height, size_t Width) {
   std::uniform_int_distribution<> Dist(0, MaxInt);
 
   auto Res = Matrix<int>{Height, Width};
-  for (auto &It : makeRange(Res.begin(), Res.end()))
+  for (auto &It : utils::makeRange(Res.begin(), Res.end()))
     It = Dist(Rng);
   return Res;
 }
@@ -47,7 +48,15 @@ MatMulResult<T> matMul(Matrix<T> &A, Matrix<T> &B) {
   auto End = std::chrono::steady_clock::now();
 
   return MatMulResult<T>{NewMatrix, 
-      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start)};
+      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count()};
+}
+
+template <typename T>
+bool check(Matrix<T> &A, Matrix<T> &B, Matrix<T> &Res) {
+  auto RealRes = matMul<T>(A, B).Matr;
+  if (RealRes.w() != Res.w() || RealRes.h() != Res.h())
+    return false;
+  return std::equal(RealRes.begin(), RealRes.end(), Res.begin());
 }
 
 }// namespace host

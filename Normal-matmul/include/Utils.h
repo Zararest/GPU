@@ -5,7 +5,6 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 
-
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) (expr)
 #else
@@ -22,11 +21,13 @@
     }                                                                          \
   }
 
+namespace utils {
+
 void printDeviceLimits(std::ostream &S);
 void checkKernelsExec();
 
 template <typename T1, typename T2>
-__device__ __host__ size_t ceilDiv(T1 Lhs, T2 Rhs) {
+__device__ __host__ unsigned ceilDiv(T1 Lhs, T2 Rhs) {
   auto LhsF = static_cast<float>(Lhs);
   auto RhsF = static_cast<float>(Rhs);
   return ceil(LhsF / RhsF);
@@ -48,3 +49,4 @@ template <typename It>
 IteratorRange<It> makeRange(It Begin, It End) {
   return IteratorRange<It>{Begin, End};
 }
+} // namespace utils

@@ -3,6 +3,8 @@
 
 #include <random>
 
+namespace utils {
+
 void printDeviceLimits(std::ostream &S) {
   int DeviceCount;
   cudaGetDeviceCount(&DeviceCount);
@@ -33,3 +35,4 @@ void checkKernelsExec() {
     exit(1);
   }
 }
+} // namesapce utils

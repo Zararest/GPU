@@ -38,7 +38,7 @@ void __tiledMatMul(device::Matrix<T> A, device::Matrix<T> B,
   auto BTile = Tile_t<T>{BlockSize, BShMem};
   
   float Res = 0.0;
-  for (size_t i = 0; i < ceilDiv(A.w(), blockDim.x); ++i) {
+  for (size_t i = 0; i < utils::ceilDiv(A.w(), blockDim.x); ++i) {
     __fillTiles(ATile, A, BTile, B, i, BlockSize);
     __syncthreads();
 
@@ -63,18 +63,18 @@ host::MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T
   assert(A.w() == B.h());
 
   dim3 ThrBlockDim{BlockSize, BlockSize};
-  dim3 BlockGridDim{ceilDiv(B.w(), ThrBlockDim.x),
-                    ceilDiv(A.h(), ThrBlockDim.y)};
+  dim3 BlockGridDim{utils::ceilDiv(B.w(), ThrBlockDim.x),
+                    utils::ceilDiv(A.h(), ThrBlockDim.y)};
 
   auto Start = std::chrono::steady_clock::now();
   __tiledMatMul<T, BlockSize><<<BlockGridDim, ThrBlockDim>>>(A_d, B_d, C_d);
   cudaDeviceSynchronize();
-  checkKernelsExec();
+  utils::checkKernelsExec();
   auto End = std::chrono::steady_clock::now();
 
   auto Res = 
     host::MatMulResult<T>{C_d.getHostMatrix(), 
-      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start)};
+      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count()};
   A_d.free();
   B_d.free();
   C_d.free();
