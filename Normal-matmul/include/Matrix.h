@@ -8,6 +8,7 @@
 #include <cuda_runtime_api.h>
 #include <vector>
 #include <chrono>
+#include <iostream>
 
 namespace host {
 

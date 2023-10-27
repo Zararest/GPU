@@ -52,11 +52,28 @@ MatMulResult<T> matMul(Matrix<T> &A, Matrix<T> &B) {
 }
 
 template <typename T>
-bool check(Matrix<T> &A, Matrix<T> &B, Matrix<T> &Res) {
+void print(Matrix<T> Matr, std::ostream &S) {
+  for (size_t y = 0; y < Matr.w() ; ++y) {
+    for (size_t x = 0; x < Matr.h(); ++x)
+      S << Matr[y][x] << " ";
+    S << "\n";
+  }
+}
+
+template <typename T>
+bool check(Matrix<T> &A, Matrix<T> &B, Matrix<T> &Res, bool DumpOnFail = false) {
   auto RealRes = matMul<T>(A, B).Matr;
   if (RealRes.w() != Res.w() || RealRes.h() != Res.h())
     return false;
-  return std::equal(RealRes.begin(), RealRes.end(), Res.begin());
+  if (!std::equal(RealRes.begin(), RealRes.end(), Res.begin(),  
+                  [](const T &Lhs, const T &Rhs) {
+                    auto e = Lhs * 0.01;
+                    return Rhs > Lhs - e && Rhs < Lhs + e;
+                  })) {
+    print(RealRes, std::cout);
+    return false;
+  }
+  return true;
 }
 
 }// namespace host

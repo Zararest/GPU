@@ -12,6 +12,7 @@ constexpr size_t BlockSize = 16;
 
 struct Config {
   bool CheckMat = false;
+  bool PrintOnFail = false;
   bool PrintOnlyTime = false;
   bool TimeWithoutCopy = false;
   bool Print = false;
@@ -52,6 +53,12 @@ void matMul(Config MatrConfig) {
   
   if (MatrConfig.CheckMat && !check(A, B, Res.Matr)) {
     std::cout << "Wrong answer" << std::endl;
+    if (MatrConfig.PrintOnFail) {
+      std::cout << "Real result:\n";
+      check(A, B, Res.Matr, /*DumpOnFail*/ true);
+      std::cout << "\n\nMy result:\n";
+      host::print(Res.Matr, std::cout);
+    }
     return;
   }
 
@@ -72,6 +79,12 @@ int main(int Argc, char **Argv) {
     Argv++;
     Argc--;
     if (Option == "--check") {
+      MatrConfig.CheckMat = true;
+      continue;
+    }
+
+    if (Option == "--check-with-dump") {
+      MatrConfig.PrintOnFail = true;
       MatrConfig.CheckMat = true;
       continue;
     }
