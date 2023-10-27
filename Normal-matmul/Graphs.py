@@ -4,9 +4,6 @@ import matplotlib.cm as cm
 import matplotlib as matplotlib
 import numpy as np
 
-def build_matmul(build_path):
-  subproc.run(['cd',  build_path, '&&', 'make'], check=True)
-
 def run_matmul(matmul_path, mode, parameters):
   result = []
   for size in parameters:
@@ -28,14 +25,18 @@ def run_matmul(matmul_path, mode, parameters):
   return result
 
 def main():
+  # Эти переменные можно менять
+  CPU_measures_num = 0
+  matmul_path = './build/MatMul'
+
   N_array = np.linspace(100, 4096 * 2, 30)
-  N_array_CPU = N_array[:0]
+  N_array_CPU = N_array[:CPU_measures_num]
   fig, ax = plt.subplots(figsize=(10, 7))
 
   print('GPU:')
-  time_array_tiled = run_matmul('./build/MatMul', '--tiled', N_array)
+  time_array_tiled = run_matmul(matmul_path, '--tiled', N_array)
   print('CPU')
-  time_array_CPU = run_matmul('./build/MatMul', '--CPU', N_array_CPU)
+  time_array_CPU = run_matmul(matmul_path, '--CPU', N_array_CPU)
 
   ax.plot(N_array, time_array_tiled)  
   ax.scatter(N_array, time_array_tiled, marker='+', label='с shared памятью')
