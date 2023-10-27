@@ -1,11 +1,12 @@
 #include "Kernels.cu.h"
-#include "Generator.h"
+#include "Matr-utils.h"
 
 #include <memory>
 
 enum class MulType {
   Tiled,
-  CPU
+  CPU,
+  CPUOpt
 };
 
 constexpr size_t BlockSize = 16;
@@ -122,7 +123,6 @@ int main(int Argc, char **Argv) {
     std::cout << "Unknown argument: " << Option << std::endl;
     assert(false);
   }
-
 
   if (!MatrConfig.PrintOnlyTime) {
     std::cout << "Matricies sizes: A{" << MatrConfig.Heigth << ", "
