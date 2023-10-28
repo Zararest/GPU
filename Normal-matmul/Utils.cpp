@@ -36,7 +36,7 @@ void checkKernelsExec() {
   }
 }
 
-void report_fatal_error(const std::string &Msg) {
+void reportFatalError(const std::string &Msg) {
   std::cerr << "Error: " << Msg << std::endl;
   exit(-1);
 }

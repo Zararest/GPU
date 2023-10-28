@@ -159,8 +159,8 @@ void fillVisitSets(std::set<size_t> &Visited,
 
 // Graph - matrix NxN
 // Graph[a][b] == true  =>  graph has a->b 
-GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum, 
-                          double AverageBFSVisiteesNum) {
+GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum = 4, 
+                          double AverageBFSVisiteesNum = 3) {
   auto BFS = std::vector<size_t>(Size);
   auto Graph = Matrix<Relation>{Size, Size};
   auto Visited = std::set<size_t>{};
@@ -224,9 +224,9 @@ Matrix<T> readMatrix(std::istream &S) {
   S >> Height >> Separator >> Width;
   
   if (Separator != 'x')
-    utils::report_fatal_error("Wrong separator");
+    utils::reportFatalError("Wrong separator");
   if (Height == 0 || Width == 0)
-    utils::report_fatal_error("Wrong matrix size");
+    utils::reportFatalError("Wrong matrix size");
 
   auto ResMatr = Matrix<T>{Height, Width};
   for (size_t y = 0; y < Height; ++y)
@@ -234,6 +234,13 @@ Matrix<T> readMatrix(std::istream &S) {
       S >> ResMatr[y][x];
   
   return ResMatr;
+}
+
+void dumpBFS(const std::vector<size_t> &BFS, std::ostream &S) {
+  S << "BFS " << BFS.size() << std::endl;
+  for (auto Level : BFS)
+    S << Level << " ";
+  S << std::endl;
 }
 
 }// namespace host

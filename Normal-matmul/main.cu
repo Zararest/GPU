@@ -96,7 +96,8 @@ int main(int Argc, char **Argv) {
     }
 
     if (Option == "--matrix") {
-      assert(Argc >= 3 && "Too few arguments");
+      if (Argc < 3)
+        utils::reportFatalError("Too few arguments");
       MatrConfig.Heigth = std::stoi(Argv[0]);
       MatrConfig.Width = std::stoi(Argv[1]);
       MatrConfig.JointSize = std::stoi(Argv[2]);
@@ -120,8 +121,7 @@ int main(int Argc, char **Argv) {
       continue;
     }
 
-    std::cout << "Unknown argument: " << Option << std::endl;
-    assert(false);
+    utils::reportFatalError("Unknown argument: " + Option);
   }
 
   if (!MatrConfig.PrintOnlyTime) {

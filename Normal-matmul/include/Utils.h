@@ -66,6 +66,6 @@ std::set<T> sub(const std::set<size_t> &Lhs, const std::set<T> &Rhs) {
   return Ans;
 }
 
-void report_fatal_error(const std::string &Msg);
+void reportFatalError(const std::string &Msg);
 
 } // namespace utils
