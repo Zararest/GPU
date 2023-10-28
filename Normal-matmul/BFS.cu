@@ -1,6 +1,8 @@
 #include "Kernels.cu.h"
 #include "Matr-utils.h"
 
+#include <fstream>
+
 struct Config {
   bool Check = false;
   bool PrintOnlyTime = false;
@@ -8,11 +10,12 @@ struct Config {
 };
 
 int main(int Argc, char **Argv) {
-  auto Res = host::generateGraph(50, 2, 1);
-  std::cout << Res.Graph.h() << "x" << Res.Graph.w() << std::endl;
-  //print(Res.Graph, std::cout, std::boolalpha);
-  std::cout << "\nBFS:" << std::endl;
-  for (auto Level : Res.BFS)
-    std::cout << Level << " ";
-  std::cout << std::endl;
+  auto Res = host::generateGraph(10, 2, 1);
+  auto FileName = "Matr-dump";
+  auto OFStream = std::ofstream{FileName};
+  host::dumpMatrix(Res.Graph, OFStream);
+
+  auto IFStream = std::ifstream{FileName};
+  auto FileMatr = host::readMatrix<host::Relation>(IFStream);
+  host::dumpMatrix<host::Relation>(FileMatr, std::cout);
 }

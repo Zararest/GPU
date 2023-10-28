@@ -6,6 +6,7 @@
 #include <random>
 #include <set>
 #include <iterator>
+#include <fstream>
 
 namespace host {
 
@@ -202,4 +203,37 @@ GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum,
   }
   return {Graph, BFS};
 }
+
+template <typename T>
+void dumpMatrix(Matrix<T> &Matr, std::ostream &S) {
+  S << Matr.h() << "x" << Matr.w() << std::endl;
+
+  for (size_t y = 0; y < Matr.h(); ++y) {
+    for (size_t x = 0; x < Matr.w(); ++x)
+      S << Matr[y][x] << " ";
+    S << std::endl;
+  }
+}
+
+template <typename T>
+Matrix<T> readMatrix(std::istream &S) {
+  auto Height = 0ul;
+  auto Width = 0ul;
+  auto Separator = '!';
+
+  S >> Height >> Separator >> Width;
+  
+  if (Separator != 'x')
+    utils::report_fatal_error("Wrong separator");
+  if (Height == 0 || Width == 0)
+    utils::report_fatal_error("Wrong matrix size");
+
+  auto ResMatr = Matrix<T>{Height, Width};
+  for (size_t y = 0; y < Height; ++y)
+    for (size_t x = 0; x < Width; ++x)
+      S >> ResMatr[y][x];
+  
+  return ResMatr;
+}
+
 }// namespace host

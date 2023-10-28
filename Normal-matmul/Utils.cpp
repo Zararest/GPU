@@ -35,4 +35,10 @@ void checkKernelsExec() {
     exit(1);
   }
 }
+
+void report_fatal_error(const std::string &Msg) {
+  std::cerr << "Error: " << Msg << std::endl;
+  exit(-1);
+}
+
 } // namesapce utils
