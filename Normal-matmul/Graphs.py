@@ -28,8 +28,11 @@ def main():
   # Эти переменные можно менять
   CPU_measures_num = 0
   matmul_path = './build/MatMul'
+  max_size = 4096 * 2
+  min_size = 100
+  num_of_measures = 30
 
-  N_array = np.linspace(100, 4096 * 2, 30)
+  N_array = np.linspace(min_size, max_size, num_of_measures)
   N_array_CPU = N_array[:CPU_measures_num]
   fig, ax = plt.subplots(figsize=(10, 7))
 
