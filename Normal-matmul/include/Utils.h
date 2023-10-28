@@ -4,6 +4,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
+#include <set>
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) (expr)
@@ -49,4 +50,20 @@ template <typename It>
 IteratorRange<It> makeRange(It Begin, It End) {
   return IteratorRange<It>{Begin, End};
 }
+
+template <typename It>
+void print(It Beg, It End, std::ostream &S) {
+  for (auto I : makeRange(Beg, End))
+    S << I << " ";
+  S << "\n";
+}
+
+template <typename T>
+std::set<T> sub(const std::set<size_t> &Lhs, const std::set<T> &Rhs) {
+  auto Ans = Lhs;
+  for (auto I : Rhs)
+    Ans.erase(I);
+  return Ans;
+}
+
 } // namespace utils

@@ -4,10 +4,16 @@ project(Example LANGUAGES CXX CUDA)
 
 add_executable(MatMul 
                main.cu
-               Utils)
-          
+               Utils.cpp)
 target_compile_features(MatMul PUBLIC cxx_std_11)
 target_include_directories(MatMul PUBLIC include/)
+set_target_properties(MatMul PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-set_target_properties(MatMul
-                      PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+add_executable(BFS 
+               BFS.cu
+               Utils.cpp)
+target_compile_features(BFS PUBLIC cxx_std_11)
+target_include_directories(BFS PUBLIC include/)
+set_target_properties(BFS PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+       
+    

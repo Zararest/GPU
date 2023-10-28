@@ -52,11 +52,11 @@ MatMulResult<T> matMul(Matrix<T> &A, Matrix<T> &B) {
       std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count()};
 }
 
-template <typename T>
-void print(Matrix<T> Matr, std::ostream &S) {
+template <typename T, typename Prefix_t = const char*>
+void print(Matrix<T> Matr, std::ostream &S, Prefix_t Prefix = "") {
   for (size_t y = 0; y < Matr.w() ; ++y) {
     for (size_t x = 0; x < Matr.h(); ++x)
-      S << Matr[y][x] << " ";
+      S << Prefix << Matr[y][x] << " ";
     S << "\n";
   }
 }
@@ -77,10 +77,10 @@ bool check(Matrix<T> &A, Matrix<T> &B, Matrix<T> &Res, bool DumpOnFail = false) 
   return true;
 }
 
-using Relation = unsigned char;
+using Relation = unsigned;
 
 struct GraphGenRes {
-  Matrix<unsigned char> Graph;
+  Matrix<Relation> Graph;
   std::vector<size_t> BFS;
 };
 
@@ -91,12 +91,13 @@ struct Edge {
   Edge(size_t From, size_t To) : From{From}, To{To} {}
 };
 
-size_t chooseNode(const std::set<size_t> Nodes, 
+size_t chooseNode(const std::set<size_t> &Nodes, 
                   std::uniform_int_distribution<size_t> &NeibDist, 
                   std::mt19937 &Rng) {
-  auto NodePos = NeibDist(Rng);
+  assert(Nodes.size());
+  auto NodePos = NeibDist(Rng) % Nodes.size();
   auto NodeIt = Nodes.begin();
-  std::advance(NodeIt, NodePos % Nodes.size());
+  std::advance(NodeIt, NodePos);
   assert(NodeIt != Nodes.end());
   return *NodeIt;
 }
@@ -109,11 +110,18 @@ std::vector<Edge> generateNewLevel(const std::set<size_t> &Visited,
                       std::mt19937 &Rng) {
   assert(CurNumOfVisitiees <= CurNumOfNeib);
   auto NewEdges = std::vector<Edge>{};
-  for (size_t i = 0; i < CurNumOfVisitiees; ++i) {
+  auto CurrentNotVisited = utils::sub(NotVisited, CurrentlyVisited);
+  
+  for (size_t i = 0; i < std::min(CurNumOfVisitiees, 
+                                  CurrentNotVisited.size()); ++i) {
     auto From = chooseNode(CurrentlyVisited, NeibDist, Rng);
-    auto To = chooseNode(NotVisited, NeibDist, Rng);
+    auto To = chooseNode(CurrentNotVisited, NeibDist, Rng);
+    CurrentNotVisited.erase(To);
     NewEdges.emplace_back(From, To);
   }
+
+  if (Visited.size() == 0)
+    return NewEdges;
 
   for (size_t i = 0; i < (CurNumOfNeib - CurNumOfVisitiees); ++i) {
     auto From = chooseNode(CurrentlyVisited, NeibDist, Rng);
@@ -124,11 +132,9 @@ std::vector<Edge> generateNewLevel(const std::set<size_t> &Visited,
 }
 
 template <typename It>
-void fillGraph(Matrix<unsigned char> &Graph, It EdgesBeg, It EdgesEnd) {
-  for (auto Edge : utils::makeRange(EdgesBeg, EdgesEnd)) {
-    assert(!Graph[Edge.From][Edge.To]);
-    Graph[Edge.From][Edge.To] = true;
-  }
+void fillGraph(Matrix<Relation> &Graph, It EdgesBeg, It EdgesEnd) {
+  for (auto Edge : utils::makeRange(EdgesBeg, EdgesEnd))
+    Graph[Edge.From][Edge.To] = 1;
 }
 
 template <typename It>
@@ -139,7 +145,7 @@ void fillVisitSets(std::set<size_t> &Visited,
   auto NewCurVisited = std::set<size_t>{};
   for (auto Edge : utils::makeRange(EdgesBeg, EdgesEnd))
     if (NotVisited.find(Edge.To) != NotVisited.end())
-      NewCurVisited.insert(Edge.From);
+      NewCurVisited.insert(Edge.To);
 
   for (auto Node : CurrentlyVisited) {
     auto Inserted = Visited.insert(Node);
@@ -155,7 +161,7 @@ void fillVisitSets(std::set<size_t> &Visited,
 GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum, 
                           double AverageBFSVisiteesNum) {
   auto BFS = std::vector<size_t>(Size);
-  auto Graph = Matrix<unsigned char>{Size, Size};
+  auto Graph = Matrix<Relation>{Size, Size};
   auto Visited = std::set<size_t>{};
   auto NotVisited = std::set<size_t>{};
   auto Rng = std::mt19937(Seed);
@@ -170,7 +176,7 @@ GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum,
   for (size_t NodeNum = 0; NodeNum < Size; ++NodeNum)
     NotVisited.emplace(NodeNum);
   std::fill(Graph.begin(), Graph.end(), 0);  
-  std::fill(Graph.begin(), Graph.end(), 0);
+  std::fill(BFS.begin(), BFS.end(), 0);
 
   constexpr auto Root = 0ul;
   auto CurrentlyVisited = std::set<size_t>{Root};
@@ -192,6 +198,7 @@ GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum,
 
     for (auto Node : CurrentlyVisited)
       BFS[Node] = Level;
+    Level++;
   }
   return {Graph, BFS};
 }
