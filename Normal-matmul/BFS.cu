@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <numeric>
 
+enum class Device {
+  CPU,
+  GPU
+};
+
 struct Config {
   bool Check = false;
   bool PrintOnlyTime = false;
@@ -12,13 +17,62 @@ struct Config {
   std::string FileToRead;
   std::string FileToDump;
   size_t Size = 32;
+  Device DeviceToCalc = Device::GPU;
 };
 
 constexpr size_t BlockSize = 16;
 
-// here [a][b] = 1 means that a->b exists
-// this means that we should transpose matrixes
+template <Device Type>
 std::vector<size_t> calculateBFS(host::Matrix<host::Relation> &Graph) {
+  utils::reportFatalError("unknown type");
+  return {};
+}
+
+template <typename Inserter>
+void getNeighbors(size_t NodeNum, host::Matrix<host::Relation> &Graph, Inserter It) {
+  for (size_t DestNode = 0; DestNode  < Graph.w(); ++DestNode)
+    if (Graph[NodeNum][DestNode] != 0)
+      It = DestNode;
+}
+
+template <>
+std::vector<size_t> calculateBFS<Device::CPU>(host::Matrix<host::Relation> &Graph) {
+  assert(Graph.h() == Graph.w());
+  auto NodesNum = Graph.h();
+  auto Ans = std::vector<size_t>(NodesNum, 0ull);
+  auto CurNodes = std::set<size_t>{};
+  auto NewNodes = std::set<size_t>{};
+  auto VisitedNodes = std::set<size_t>{};
+  auto CurLevel = 1ull;
+
+  CurNodes.insert(0ull);
+  VisitedNodes.insert(0ull);
+  while (VisitedNodes.size() < NodesNum) {
+    NewNodes.clear();
+    for (auto Node : CurNodes)
+      getNeighbors(Node, Graph, std::inserter(NewNodes, NewNodes.begin()));  
+    for (auto VisitedNode : VisitedNodes)
+      NewNodes.erase(VisitedNode);
+    
+    if (NewNodes.size() == 0)
+      utils::reportFatalError("The graph is disconnected");
+
+    for (auto NewNode : NewNodes) {
+      Ans[NewNode] = CurLevel;
+      VisitedNodes.insert(NewNode);
+    }
+
+    CurNodes = std::move(NewNodes);
+    CurLevel++;
+  }
+  return Ans;
+}
+
+// here [a][b] = 1 means that a->b exists
+// this means that multiplication should be like this:
+//   (nodes)x(Graph)
+template <>
+std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Graph) {
   assert(Graph.h() == Graph.w());
   auto NodesNum = Graph.h();
   auto Ans = std::vector<size_t>(NodesNum, 0ull);
@@ -86,8 +140,30 @@ void BFS(Config Cfg) {
     Ans = std::move(GenRes.BFS);
     Graph = std::move(GenRes.Graph);
   }
+  
+  auto Start = std::chrono::steady_clock::now();
 
-  auto CalculatedBFS = calculateBFS(Graph);
+  auto CalculatedBFS = std::vector<size_t>{};
+  switch (Cfg.DeviceToCalc) {
+  case Device::GPU:
+    CalculatedBFS = calculateBFS<Device::GPU>(Graph);
+    break;
+  case Device::CPU:
+    CalculatedBFS = calculateBFS<Device::CPU>(Graph);
+    break;
+  default:
+    utils::reportFatalError("Unknown type");
+  };
+
+  auto End = std::chrono::steady_clock::now();
+  auto FullDuration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
+  
+  if (Cfg.PrintOnlyTime) {
+    std::cout << FullDuration;
+  } else {
+    std::cout << "BFS duration: " << FullDuration << "ms" << std::endl;
+  }
 
   if (Cfg.Check && (CalculatedBFS.size() != Ans.size() || 
                     !std::equal(CalculatedBFS.begin(), CalculatedBFS.end(),
@@ -100,7 +176,6 @@ void BFS(Config Cfg) {
     }
     utils::reportFatalError("Wrong BFS");
   }
-    
   
   if (!Cfg.FileToDump.empty()) {
     auto S = std::ofstream{Cfg.FileToDump};
@@ -121,6 +196,16 @@ int main(int Argc, char **Argv) {
     Argc--;
     if (Option == "--check") {
       BFSConfig.Check = true;
+      continue;
+    }
+
+    if (Option == "--CPU") {
+      BFSConfig.DeviceToCalc = Device::CPU;
+      continue;
+    }
+
+    if (Option == "--GPU") {
+      BFSConfig.DeviceToCalc = Device::GPU;
       continue;
     }
 

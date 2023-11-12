@@ -159,8 +159,8 @@ void fillVisitSets(std::set<size_t> &Visited,
 
 // Graph - matrix NxN
 // Graph[a][b] == true  =>  graph has a->b 
-GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum = 4, 
-                          double AverageBFSVisiteesNum = 3) {
+GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum = 1000, 
+                          double AverageBFSVisiteesNum = 500) {
   auto BFS = std::vector<size_t>(Size);
   auto Graph = Matrix<Relation>{Size, Size};
   auto Visited = std::set<size_t>{};
