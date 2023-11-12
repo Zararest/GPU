@@ -39,7 +39,7 @@ class Matrix {
 
 public:
   __host__
-  Matrix(size_t Height, size_t Width)
+  Matrix(size_t Height = 0, size_t Width = 0)
       : Width{Width}, Height{Height}, Elements(Height * Width) {}
 
   template <typename It>

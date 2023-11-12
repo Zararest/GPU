@@ -243,4 +243,20 @@ void dumpBFS(const std::vector<size_t> &BFS, std::ostream &S) {
   S << std::endl;
 }
 
+std::vector<size_t> readBFS(std::istream &S) {
+  auto BFSName = std::string{};
+  auto Size = 0ul;
+  S >> BFSName >> Size;
+
+  if (BFSName != "BFS")
+    utils::reportFatalError("Wrong BFS signature");
+  if (Size == 0)
+    utils::reportFatalError("Wrong BFS size");
+
+  auto BFS = std::vector<size_t>(Size);
+  for (auto &Elem : BFS)
+    S >> Elem;
+  return BFS;
+}
+
 }// namespace host

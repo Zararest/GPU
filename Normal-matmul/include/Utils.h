@@ -6,6 +6,8 @@
 #include <iostream>
 #include <set>
 
+#define DEBUG
+
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) (expr)
 #else
