@@ -37,6 +37,23 @@ class Matrix {
     }
   };
 
+  class ConstProxy {
+    const std::vector<T> &Elems;
+    size_t Width = 0;
+    size_t RowNum = 0;
+
+  public:
+    __host__
+    ConstProxy(size_t RowNum, size_t Width, const std::vector<T> &Elems) 
+        : Elems{Elems}, Width{Width}, RowNum{RowNum} {}
+
+    __host__
+    const T &operator [](size_t Col) const {
+      DEBUG_EXPR(assert(Col < Width));
+      return Elems[RowNum * Width + Col];
+    }
+  };
+
 public:
   __host__
   Matrix(size_t Height = 0, size_t Width = 0)
@@ -51,6 +68,12 @@ public:
   Proxy operator [](size_t Row) {
     DEBUG_EXPR(assert(Row < Height));
     return Proxy{Row, Width, Elements};
+  }
+
+  __host__
+  ConstProxy operator [](size_t Row) const {
+    DEBUG_EXPR(assert(Row < Height));
+    return ConstProxy{Row, Width, Elements};
   }
 
    __host__
@@ -76,6 +99,15 @@ public:
    __host__
   size_t h() const {
     return Height;
+  }
+
+  __host__
+  static Matrix<T> transpose(const Matrix<T> &A) {
+    auto Res = Matrix<T>{A.w(), A.h()};
+    for (size_t i = 0; i < A.h(); ++i)
+      for (size_t j = 0; j < A.w(); ++j)
+        Res[j][i] = A[i][j];
+    return Res; 
   }
 };
 

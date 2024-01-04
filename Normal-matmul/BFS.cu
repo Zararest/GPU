@@ -7,7 +7,8 @@
 
 enum class Device {
   CPU,
-  GPU
+  GPU,
+  GPUOnly
 };
 
 struct Config {
@@ -81,11 +82,16 @@ std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Grap
   std::fill(CurNodes.begin(), CurNodes.end(), 0ul);
   auto CurLevel = 1ull;
   auto VisitedNodesNum = 1ull;
-
+  
+  auto KernelTime = 0ull;
   Mask[0] = 0; // root node already visited
   CurNodes[0][0] = 1; // initial node is 0
   while (VisitedNodesNum < NodesNum) {
-    auto MatMulRes = tiledMatMul<host::Relation, BlockSize>(CurNodes, Graph);
+    auto Start = std::chrono::steady_clock::now();
+    auto MatMulRes = optimizedMatMul<host::Relation, BlockSize>(CurNodes, Graph);
+    auto End = std::chrono::steady_clock::now();
+    KernelTime += std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
+
     // unmasked new nodes
     auto NewNodes = std::move(MatMulRes.Matr);
     // mask visited nodes
@@ -122,7 +128,7 @@ std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Grap
     CurNodes = std::move(MaskedNodes);
     CurLevel++;
   }
-
+  std::cout << "Kernel time: " << KernelTime << std::endl;
   return Ans;
 }
 
