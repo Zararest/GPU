@@ -57,7 +57,7 @@ void __tiledMatMul(device::Matrix<T> A, device::Matrix<T> B,
   C[Row][Col] = Res;
 }
 
-template <typename T, int BlockSize>
+template <int BlockSize, typename T>
 host::MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T> &B) {
   auto A_d = device::Matrix<T>{A};
   auto B_d = device::Matrix<T>{B};
@@ -83,11 +83,19 @@ host::MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const host::Matrix<T
   return Res;
 }
 
+template <int BlockSize, typename T>
+host::MatMulResult<T> tiledMatMul(const host::Matrix<T> &A, const device::Matrix<T> &B) {
+  assert(false && "Not implemented");
+  return host::MatMulResult<T>{A, 0};
+}
+
 template <typename T>
 __device__
 void __fillSharedVector(T *VShared, device::Matrix<T> &V, 
                         size_t Iteration, size_t Size) {
-  VShared[threadIdx.x] = V[0][Iteration * Size + threadIdx.x];
+  VShared[threadIdx.x] = 0.0;
+  if (Iteration * Size + threadIdx.x < V.w())
+    VShared[threadIdx.x] = V[0][Iteration * Size + threadIdx.x];
 }
 
 template <typename T, int BlockSize>
@@ -115,7 +123,27 @@ void __vectMatrKernel(device::Matrix<T> V, device::Matrix<T> A,
   C[0][Col] = Res;
 }
 
-template <typename T, int BlockSize>
+template <int BlockSize, typename Lhs_t, typename Rhs_t>
+void vectMatrMul(Lhs_t Lhs, Rhs_t Rhs) {
+  assert(false && "Not implemented");
+  //static_assert(false, "Not implemented");
+  // Somehow these assertions are treated as errors, 
+  //  even if this function haven't been instantiated
+}
+
+template <int BlockSize, typename Lhs_t, typename Rhs_t>
+void tiledMatMul(Lhs_t Lhs, Rhs_t Rhs) {
+  assert(false && "Not implemented");
+  //static_assert(false, "Not implemented");
+} 
+
+template <int BlockSize, typename Lhs_t, typename Rhs_t>
+void matrVectMul(Lhs_t Lhs, Rhs_t Rhs) {
+  assert(false && "Not implemented");
+  //static_assert(false, "Not implemented");
+} 
+
+template <int BlockSize, typename T>
 host::MatMulResult<T> vectMatrMul(const host::Matrix<T> &V, const host::Matrix<T> &A) {
   assert(V.h() == 1);
   assert(V.w() == A.h());
@@ -141,19 +169,52 @@ host::MatMulResult<T> vectMatrMul(const host::Matrix<T> &V, const host::Matrix<T
   return Res;
 }
 
-template <typename T, int BlockSize>
-host::MatMulResult<T> MatrVectMul(const host::Matrix<T> &A, const host::Matrix<T> &V) {
+template <int BlockSize, typename T>
+host::MatMulResult<T> vectMatrMul(const host::Matrix<T> &V, const device::Matrix<T> &A_d) {
+  assert(V.h() == 1);
+  assert(V.w() == A_d.h());
+  auto V_d = device::Matrix<T>{V};
+  auto C_d = device::Matrix<T>{V.h(), A_d.w()};
+
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(A_d.h(), ThrBlockDim.x)};
+
+  auto Start = std::chrono::steady_clock::now();
+  __vectMatrKernel<T, BlockSize><<<BlockGridDim, ThrBlockDim>>>(V_d, A_d, C_d);
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
+  auto End = std::chrono::steady_clock::now();
+
   auto Res = 
-    vectMatrMul<T, BlockSize>(host::Matrix<T>::transpose(V), host::Matrix<T>::transpose(A));
+    host::MatMulResult<T>{C_d.getHostMatrix(), 
+      std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count()};
+  V_d.free();
+  C_d.free();
+  return Res;
+}
+
+template <int BlockSize, typename T>
+host::MatMulResult<T> matrVectMul(const host::Matrix<T> &A, const host::Matrix<T> &V) {
+  auto Res = 
+    vectMatrMul<BlockSize>(host::Matrix<T>::transpose(V), host::Matrix<T>::transpose(A));
   Res.Matr = host::Matrix<T>::transpose(Res.Matr);
   return Res;
 }
 
-template <typename T, int BlockSize>
-host::MatMulResult<T> optimizedMatMul(const host::Matrix<T> &A, const host::Matrix<T> &B) {
+template <int BlockSize, typename T>
+host::MatMulResult<T> matrVectMul(const host::Matrix<T> &A, const device::Matrix<T> &V) {
+  assert(false && "Not implemented yet");
+  return host::MatMulResult<T>{A, 0};
+}
+
+template <int BlockSize, typename LMatr_t, typename RMatr_t>
+host::MatMulResult<typename LMatr_t::value_type> 
+optimizedMatMul(const LMatr_t &A, const RMatr_t &B) {
+  static_assert(std::is_same<typename LMatr_t::value_type, 
+                             typename RMatr_t::value_type>::value);
   if (A.h() == 1)
-    return vectMatrMul<T, BlockSize>(A, B);
+    return vectMatrMul<BlockSize>(A, B);
   if (B.w() == 1)
-    return MatrVectMul<T, BlockSize>(A, B);
-  return tiledMatMul<T, BlockSize>(A, B);
+    return matrVectMul<BlockSize>(A, B);
+  return tiledMatMul<BlockSize>(A, B);
 }

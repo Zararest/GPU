@@ -8,7 +8,7 @@
 enum class Device {
   CPU,
   GPU,
-  GPUOnly
+  GPUNoCopy
 };
 
 struct Config {
@@ -69,11 +69,8 @@ std::vector<size_t> calculateBFS<Device::CPU>(host::Matrix<host::Relation> &Grap
   return Ans;
 }
 
-// here [a][b] = 1 means that a->b exists
-// this means that multiplication should be like this:
-//   (nodes)x(Graph)
-template <>
-std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Graph) {
+template <typename Matr_t>
+std::vector<size_t> __calculateBFS(Matr_t &Graph) {
   assert(Graph.h() == Graph.w());
   auto NodesNum = Graph.h();
   auto Ans = std::vector<size_t>(NodesNum, 0ull);
@@ -88,7 +85,7 @@ std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Grap
   CurNodes[0][0] = 1; // initial node is 0
   while (VisitedNodesNum < NodesNum) {
     auto Start = std::chrono::steady_clock::now();
-    auto MatMulRes = optimizedMatMul<host::Relation, BlockSize>(CurNodes, Graph);
+    auto MatMulRes = optimizedMatMul<BlockSize>(CurNodes, Graph);
     auto End = std::chrono::steady_clock::now();
     KernelTime += std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
 
@@ -131,6 +128,21 @@ std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Grap
   std::cout << "Kernel time: " << KernelTime << std::endl;
   return Ans;
 }
+// here [a][b] = 1 means that a->b exists
+// this means that multiplication should be like this:
+//   (nodes)x(Graph)
+template <>
+std::vector<size_t> calculateBFS<Device::GPU>(host::Matrix<host::Relation> &Graph) {
+  return __calculateBFS(Graph);
+}
+
+template <>
+std::vector<size_t> calculateBFS<Device::GPUNoCopy>(host::Matrix<host::Relation> &Graph) {
+  auto Graph_d = device::Matrix<host::Relation>{Graph};
+  auto Res = __calculateBFS(Graph_d);
+  Graph_d.free();
+  return Res;
+}
 
 void BFS(Config Cfg) {
   auto Ans = std::vector<size_t>{};
@@ -156,6 +168,9 @@ void BFS(Config Cfg) {
     break;
   case Device::CPU:
     CalculatedBFS = calculateBFS<Device::CPU>(Graph);
+    break;
+  case Device::GPUNoCopy:
+    CalculatedBFS = calculateBFS<Device::GPUNoCopy>(Graph);
     break;
   default:
     utils::reportFatalError("Unknown type");
@@ -212,6 +227,11 @@ int main(int Argc, char **Argv) {
 
     if (Option == "--GPU") {
       BFSConfig.DeviceToCalc = Device::GPU;
+      continue;
+    }
+
+    if (Option == "--GPUNoCopy") {
+      BFSConfig.DeviceToCalc = Device::GPUNoCopy;
       continue;
     }
 

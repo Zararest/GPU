@@ -37,7 +37,7 @@ void matMul(Config MatrConfig) {
     break;
 
   case MulType::Tiled:
-    Res = tiledMatMul<T, BlockSize>(A, B);
+    Res = tiledMatMul<BlockSize, T>(A, B);
     break;
 
   default:

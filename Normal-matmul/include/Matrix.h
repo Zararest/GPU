@@ -55,6 +55,8 @@ class Matrix {
   };
 
 public:
+  using value_type = T;
+
   __host__
   Matrix(size_t Height = 0, size_t Width = 0)
       : Width{Width}, Height{Height}, Elements(Height * Width) {}
@@ -143,6 +145,8 @@ class Matrix {
   };
 
 public:
+  using value_type = T;
+
   __host__
   Matrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
@@ -178,14 +182,19 @@ public:
     return Proxy{Width, Elements + Row * Width};
   }
 
-  __device__
+  __device__ __host__
   size_t w() const {
     return Width;
   }
 
-  __device__
+  __device__ __host__
   size_t h() const {
     return Height;
+  }
+
+  __device__
+  void foo() {
+    
   }
 
   class Tile {
