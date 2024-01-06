@@ -125,7 +125,6 @@ std::vector<size_t> __calculateBFS(Matr_t &Graph) {
     CurNodes = std::move(MaskedNodes);
     CurLevel++;
   }
-  std::cout << "Kernel time: " << KernelTime << std::endl;
   return Ans;
 }
 // here [a][b] = 1 means that a->b exists
