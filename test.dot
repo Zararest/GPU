@@ -1,0 +1,5 @@
+graph complete_graph {
+  A -- B [label="Edge \nAB"];
+  A -- C [label="Edge AC"];
+  B -- C [label="Edge BC"];
+}
