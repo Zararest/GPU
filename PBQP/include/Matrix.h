@@ -15,6 +15,7 @@ namespace host {
 template <typename T>
 class Matrix {
   using It = typename std::vector<T>::iterator;
+  using ConstIt = typename std::vector<T>::const_iterator;
 
   size_t Width = 0;
   size_t Height = 0;
@@ -90,6 +91,16 @@ public:
 
    __host__
   It end() {
+    return Elements.end();
+  }
+
+   __host__
+  ConstIt begin() const {
+    return Elements.begin();
+  }
+
+   __host__
+  ConstIt end() const {
     return Elements.end();
   }
 

@@ -56,12 +56,12 @@ private:
 
 public:
   Node &addNode(host::Matrix<Cost_t> CostVector) {
-    Nodes.emplace_back(CostVector);
+    Nodes.emplace_back(std::make_unique<Node>(std::move(CostVector)));
     return *Nodes.back();
   }
 
   Edge &addEdge(Node &Lhs, host::Matrix<Cost_t> CostMatrix, Node &Rhs) {
-    Edges.emplace_back(Lhs, CostMatrix, Rhs);
+    Edges.emplace_back(std::make_unique<Edge>(&Lhs, std::move(CostMatrix), &Rhs));
     return *Edges.back();
   }
 

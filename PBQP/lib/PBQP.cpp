@@ -13,7 +13,7 @@ Graph::Edge::Edge(Node *Lhs, host::Matrix<Graph::Cost_t> CostMatrix, Node *Rhs) 
   assert(Rhs->costSize() == CostMatrix.w());
 }
 
-Graph::Cost_t Graph::getCost(size_t LhsChoice, size_t RhsChoise) const {
+Graph::Cost_t Graph::Edge::getCost(size_t LhsChoice, size_t RhsChoice) const {
   assert(LhsChoice < Lhs->costSize());
   assert(RhsChoice < Rhs->costSize());
   return CostMatrix[LhsChoice][RhsChoice];
@@ -30,8 +30,8 @@ bool Graph::Edge::operator==(const Edge &RhsEdge) const {
 std::unique_ptr<Graph::Edge> 
 Graph::Node::createEdge(Graph::Node &Lhs, host::Matrix<Graph::Cost_t> CostMatrix,
                         Graph::Node &Rhs) {
-  assert(Lhs.size() == CostMatrix.h());
-  assert(Rhs.size() == CostMatrix.w());
+  assert(Lhs.costSize() == CostMatrix.h());
+  assert(Rhs.costSize() == CostMatrix.w());
   auto NewEdge = std::make_unique<Edge>(&Lhs, std::move(CostMatrix), &Rhs);
   Lhs.Edges.push_back(NewEdge.get());
   Rhs.Edges.push_back(NewEdge.get());
@@ -55,15 +55,17 @@ void Graph::print(std::ostream &OS) const {
   OS << "digraph Dump {\n" <<
         "node[" <<  GraphNodeColour << "]\n";
   for (auto &Node : Nodes) {
+    assert(Node);
     OS << "\"" << &Node << "\" label = \"";
-    Node.print(OS);
+    Node->print(OS);
     OS << "\"]\n";
   }
 
   for (auto &Edge : Edges) {
-    auto [Lhs, Rhs] = Edge.getNodes();
+    assert(Edge);
+    auto [Lhs, Rhs] = Edge->getNodes();
     OS << "\"" << &Lhs << "\" -- \"" << &Rhs << " [label = \"";
-    Edge.print(OS);
+    Edge->print(OS);
     OS << "\"]\n"; 
   }
   OS << "}\n";
