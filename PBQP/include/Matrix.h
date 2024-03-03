@@ -65,7 +65,9 @@ public:
   template <typename It>
   __host__
   Matrix(It Beg, It End, size_t Height, size_t Width) 
-      : Width{Width}, Height{Height}, Elements{Beg, End} {}
+      : Width{Width}, Height{Height}, Elements{Beg, End} {
+    assert(Width * Height == Elements.size());
+  }
 
   __host__
   Proxy operator [](size_t Row) {
@@ -206,11 +208,6 @@ public:
   __device__ __host__
   size_t h() const {
     return Height;
-  }
-
-  __device__
-  void foo() {
-    
   }
 
   class Tile {
