@@ -1,4 +1,5 @@
 #include "PBQP.h"
+#include "CPU-solver.h"
 
 #include <fstream>
 
@@ -36,4 +37,6 @@ int main() {
   NewDotGraphOS.close();
   assert(NewGraph.validate());
   assert(CopiedGraph.validate());
+  auto Solver = PBQP::CPUFullSearch{};
+  auto Solution = Solver.solve(std::move(CopiedGraph));
 }

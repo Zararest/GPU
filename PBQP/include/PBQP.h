@@ -52,6 +52,7 @@ struct Graph final {
     void changeCost(host::Matrix<Cost_t> NewCostVector);
     void changeName(std::string NewName) { Name = std::move(NewName); }
     const host::Matrix<Cost_t> &getCostVector() const { return CostVector; }
+    Cost_t getCost(size_t Choice) const { return CostVector[Choice][0]; }
     size_t costSize() const { return CostVector.h(); }
     size_t order() const { return Edges.size(); }
     auto edgesBeg() { return Edges.begin(); }
@@ -89,6 +90,12 @@ public:
 
   static Graph copy(const Graph &OldGraph);
 
+  size_t size() const { return Nodes.size(); }
+  auto nodesBeg() const { return Nodes.begin(); }
+  auto nodesEnd() const { return Nodes.end(); }
+  auto edgesBeg() const { return Edges.begin(); }
+  auto edgesEnd() const { return Edges.end(); }
+
   bool validate() const;
   //print graphviz
   void print(std::ostream &OS) const;
@@ -99,12 +106,18 @@ public:
 };
 
 class Solution final {
-  Graph InitialGraph;
+  const Graph InitialGraph;
   //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
 
 public:
   Solution(Graph InitialGraph) : InitialGraph{std::move(InitialGraph)} {}
+
+  const Graph &getGraph() const { return InitialGraph; }
+  void clear() { SelectedVariants.clear(); }
+  bool addSelection(size_t NodeIdx, size_t Select) {
+    return SelectedVariants.insert({NodeIdx, Select}).second;
+  }
 };
 
 struct Solver {
