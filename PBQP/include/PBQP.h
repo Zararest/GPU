@@ -14,6 +14,8 @@ namespace PBQP {
 
 struct Graph final {
   using Cost_t = float;
+  static constexpr Cost_t InfCost = std::numeric_limits<Cost_t>::infinity();
+  static constexpr auto InfLiteral = "inf";
   class Node;
 
   // Lhs{nL} CostMatrix{nL x nR} Rhs{nR} 
@@ -23,8 +25,6 @@ struct Graph final {
     Node *Rhs = nullptr;
 
   public:
-    static constexpr Cost_t InfCost = std::numeric_limits<Cost_t>::quiet_NaN();
-
     Edge(Node *Lhs, host::Matrix<Cost_t> CostMatrix, Node *Rhs);
     Cost_t getCost(size_t LhsChoice, size_t RhsChoise) const;
     const host::Matrix<Cost_t> &getCostMatrix() const { return CostMatrix; }
@@ -39,13 +39,18 @@ struct Graph final {
   class Node {
     host::Matrix<Cost_t> CostVector;
     std::vector<Edge*> Edges;
+    std::string Name;
 
   public:
-    Node(host::Matrix<Cost_t> CostVector) : CostVector{std::move(CostVector)} {}
+    Node(host::Matrix<Cost_t> CostVector, std::string Name = "node") : 
+      CostVector{std::move(CostVector)}, Name{Name} {}
 
-    static std::unique_ptr<Edge> createEdge(Node &Lhs, host::Matrix<Cost_t> CostMatrix, Node &Rhs);
+    static std::unique_ptr<Edge> createEdge(Node &Lhs, 
+                                            host::Matrix<Cost_t> CostMatrix, 
+                                            Node &Rhs);
 
     void changeCost(host::Matrix<Cost_t> NewCostVector);
+    void changeName(std::string NewName) { Name = std::move(NewName); }
     const host::Matrix<Cost_t> &getCostVector() const { return CostVector; }
     size_t costSize() const { return CostVector.h(); }
     size_t order() const { return Edges.size(); }
@@ -95,15 +100,14 @@ public:
 
 class Solution final {
   Graph InitialGraph;
+  //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
 
 public:
   Solution(Graph InitialGraph) : InitialGraph{std::move(InitialGraph)} {}
 };
 
-class Solver {
-
-public:
+struct Solver {
   virtual Solution solve(Graph Task) = 0;
 };
 

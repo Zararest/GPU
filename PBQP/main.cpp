@@ -16,7 +16,7 @@ int main() {
   Graph.addEdge(Node1, Matrix, Node2);
   Matrix[0][0] = 5;
   Graph.addEdge(Node2, Matrix, Node3);
-  Matrix[0][0] = 6;
+  Matrix[0][0] = PBQP::Graph::InfCost;
   Graph.addEdge(Node3, Matrix, Node1);
   assert(Graph.validate());
   

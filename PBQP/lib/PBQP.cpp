@@ -2,6 +2,7 @@
 
 #include <tuple>
 #include <unordered_map>
+#include <sstream>
 
 namespace PBQP {
 
@@ -58,6 +59,7 @@ void Graph::Edge::print(std::ostream &OS) const {
 void Graph::Node::print(std::ostream &OS) const {
   for (auto Cost : CostVector)
     OS << Cost << "\n";
+  OS << Name << "\n";
 }
 
 Graph Graph::copy(const Graph &OldGraph) {
@@ -161,6 +163,18 @@ static size_t getSize(std::istream &IS) {
   return Val;
 }
 
+static Graph::Cost_t getValue(std::istream &IS) {
+  auto ValStr = std::string{};
+  IS >> ValStr;
+  if (ValStr == Graph::InfLiteral)
+    return Graph::InfCost;
+  auto SS = std::stringstream{ValStr};
+  auto Val = Graph::Cost_t{};
+  if (!(SS >> Val))
+    utils::reportFatalError("Can't read a matrix's value");
+  return Val;
+}
+
 static host::Matrix<Graph::Cost_t> parseMatrix(std::istream &IS) {
   auto Separator = std::string{};
   auto Hight = getSize(IS);
@@ -171,12 +185,8 @@ static host::Matrix<Graph::Cost_t> parseMatrix(std::istream &IS) {
 
   auto Width = getSize(IS);
   auto Data = std::vector<Graph::Cost_t>{};
-  for (size_t i = 0; i < Hight * Width; ++i) {
-    auto Val = Graph::Cost_t{};
-    if (!(IS >> Val))
-      utils::reportFatalError("Can't read a matrix val");
-    Data.push_back(Val);
-  }
+  for (size_t i = 0; i < Hight * Width; ++i)
+    Data.push_back(getValue(IS));
   return {Data.begin(), Data.end(), Hight, Width};
 }
 
@@ -220,11 +230,20 @@ static size_t parseNumberOfItems(std::istream &IS, const std::string &Name) {
   return NumOfItems;
 }
 
+static std::string parseName(std::istream &IS) {
+  auto Name = std::string{};
+  if (!(IS >> Name))
+    utils::reportFatalError("Can't parse node's name");
+  return Name;
+}
+
 void Graph::parseNode(std::istream &IS, std::map<size_t, size_t> &AddrToNodexIdx) {
   auto NodeAddr = getAddr(IS);
   auto CostVector = parseMatrix(IS);
+  auto Name = parseName(IS);
   auto &Node = getNodeByAddr(NodeAddr, AddrToNodexIdx);
   Node.changeCost(std::move(CostVector));
+  Node.changeName(std::move(Name));
 }
 
 void Graph::read(std::istream &IS) { 
