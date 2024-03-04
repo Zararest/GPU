@@ -18,6 +18,7 @@ int main() {
   Graph.addEdge(Node2, Matrix, Node3);
   Matrix[0][0] = 6;
   Graph.addEdge(Node3, Matrix, Node1);
+  assert(Graph.validate());
   
   auto DotGraphOS = std::ofstream{"graph.dot"};
   auto GraphOS = std::ofstream{"graph.out"};
@@ -30,5 +31,9 @@ int main() {
   NewGraph.read(NewGraphIS);
 
   auto NewDotGraphOS = std::ofstream{"new-graph.dot"};
-  NewGraph.print(NewDotGraphOS);
+  auto CopiedGraph = PBQP::Graph::copy(NewGraph);
+  CopiedGraph.print(NewDotGraphOS);
+  NewDotGraphOS.close();
+  assert(NewGraph.validate());
+  assert(CopiedGraph.validate());
 }

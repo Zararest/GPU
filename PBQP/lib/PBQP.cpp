@@ -1,6 +1,7 @@
 #include "PBQP.h"
 
 #include <tuple>
+#include <unordered_map>
 
 namespace PBQP {
 
@@ -57,6 +58,59 @@ void Graph::Edge::print(std::ostream &OS) const {
 void Graph::Node::print(std::ostream &OS) const {
   for (auto Cost : CostVector)
     OS << Cost << "\n";
+}
+
+Graph Graph::copy(const Graph &OldGraph) {
+  auto NewGraph = Graph{};
+  std::transform(OldGraph.Nodes.begin(), OldGraph.Nodes.end(),
+                 std::back_inserter(NewGraph.Nodes), 
+                 [](const auto &NodePtr) {
+                    assert(NodePtr);
+                    return std::make_unique<Node>(NodePtr->getCostVector());
+                 });
+  auto NodeAddrToIdx = std::unordered_map<Node *, size_t>{};
+  for (size_t Idx = 0; Idx < OldGraph.Nodes.size(); ++Idx)
+    NodeAddrToIdx.insert({OldGraph.Nodes[Idx].get(), Idx});
+  
+  for (auto &Edge : OldGraph.Edges) {
+    auto [LhsNodeAddr, RhsNodeAddr] = Edge->getNodes();
+    assert(NodeAddrToIdx.find(LhsNodeAddr) != NodeAddrToIdx.end());
+    assert(NodeAddrToIdx.find(RhsNodeAddr) != NodeAddrToIdx.end());
+    auto &LhsNodePtr = NewGraph.Nodes[NodeAddrToIdx[LhsNodeAddr]];
+    auto &RhsNodePtr = NewGraph.Nodes[NodeAddrToIdx[RhsNodeAddr]];
+    assert(LhsNodePtr && RhsNodePtr);
+    NewGraph.addEdge(*LhsNodePtr, Edge->getCostMatrix(), *RhsNodePtr);
+  } 
+  return NewGraph;
+}
+
+bool Graph::nodeHasEdge(const Node &Node, const Edge &Edge) {
+  return std::find(Node.edgesBeg(), Node.edgesEnd(), &Edge) != Node.edgesEnd();
+}
+
+bool Graph::edgeHasNode(const Edge &Edge, const Node &Node) {
+  auto [Lhs, Rhs] = Edge.getNodes();
+  return Lhs == &Node || Rhs == &Node;
+}
+
+bool Graph::validate() const {
+  for (auto &Edge : Edges) {
+    const auto [Lhs, Rhs] = Edge->getNodes();
+    assert(Lhs && Rhs);
+    assert(Edge);
+    if (!nodeHasEdge(*Lhs, *Edge) || !nodeHasEdge(*Rhs, *Edge))
+      return false;
+  }
+
+  for (auto &Node : Nodes)
+    if (std::any_of(Node->edgesBeg(), Node->edgesEnd(), 
+          [&Node](const Edge *EdgePtr) {
+            assert(EdgePtr);
+            assert(Node);
+            return !edgeHasNode(*EdgePtr, *Node);
+          }))
+      return false;
+  return true;
 }
 
 void Graph::print(std::ostream &OS) const {
