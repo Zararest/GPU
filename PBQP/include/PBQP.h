@@ -53,6 +53,7 @@ struct Graph final {
     void changeName(std::string NewName) { Name = std::move(NewName); }
     const host::Matrix<Cost_t> &getCostVector() const { return CostVector; }
     Cost_t getCost(size_t Choice) const { return CostVector[Choice][0]; }
+    const std::string &getName() const { return Name; }
     size_t costSize() const { return CostVector.h(); }
     size_t order() const { return Edges.size(); }
     auto edgesBeg() { return Edges.begin(); }
@@ -106,9 +107,11 @@ public:
 };
 
 class Solution final {
-  const Graph InitialGraph;
+  Graph InitialGraph;
   //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
+  static constexpr std::string_view SolutionColour = 
+    "color=red, fontsize=14, style=filled, shape=oval";
 
 public:
   Solution(Graph InitialGraph) : InitialGraph{std::move(InitialGraph)} {}
@@ -118,6 +121,7 @@ public:
   bool addSelection(size_t NodeIdx, size_t Select) {
     return SelectedVariants.insert({NodeIdx, Select}).second;
   }
+  void print(std::ostream &OS) const;
 };
 
 struct Solver {

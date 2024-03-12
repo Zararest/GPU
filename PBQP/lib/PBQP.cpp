@@ -256,4 +256,27 @@ void Graph::read(std::istream &IS) {
   for (size_t i = 0; i < NumOfNodes; ++i)
     parseNode(IS, AddrToNodeIdx);
 }
+
+void Solution::print(std::ostream &OS) const {
+  OS << "graph Dump {\n" <<
+        "node[" <<  SolutionColour << "]\n";
+  auto Beg = InitialGraph.nodesBeg();
+  auto End = InitialGraph.nodesEnd();
+  for (size_t Idx = 0; Beg != End; ++Idx, ++Beg) {
+    assert(SelectedVariants.find(Idx) != SelectedVariants.end());
+    OS << "\"" << Beg->get() << "\" [label = \"" <<
+    (*Beg)->getName() << " " << SelectedVariants.find(Idx)->second <<
+    "\"]\n";
+  }      
+
+  for (auto &Edge : utils::makeRange(InitialGraph.edgesBeg(),
+                                      InitialGraph.edgesEnd()) ) {
+    assert(Edge);
+    auto [Lhs, Rhs] = Edge->getNodes();
+    OS << "\"" << Lhs << "\" -- \"" << Rhs << "\" [label = \"";
+    Edge->print(OS);
+    OS << "\"]\n"; 
+  }
+  OS << "}\n";
+}
 } // namespace PBQP 

@@ -39,4 +39,7 @@ int main() {
   assert(CopiedGraph.validate());
   auto Solver = PBQP::CPUFullSearch{};
   auto Solution = Solver.solve(std::move(CopiedGraph));
+  
+  auto SolutionStream = std::ofstream{"solution.dot"};
+  Solution.print(SolutionStream);
 }
