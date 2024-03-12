@@ -36,6 +36,12 @@ __device__ __host__ unsigned ceilDiv(T1 Lhs, T2 Rhs) {
   return ceil(LhsF / RhsF);
 }
 
+template <typename T1, typename T2>
+struct Pair {
+  T1 First;
+  T2 Second;
+};
+
 template <typename It>
 class IteratorRange {
   It Begin;

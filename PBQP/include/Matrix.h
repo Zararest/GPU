@@ -145,7 +145,7 @@ template <typename T>
 class Matrix {
   size_t Width = 0;
   size_t Height = 0;
-  T *Elements;
+  T *Elements = nullptr;
 
   class Proxy {
     T *RowElems;
@@ -164,6 +164,9 @@ class Matrix {
 
 public:
   using value_type = T;
+  
+  __host__
+  Matrix() {}
 
   __host__
   Matrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {

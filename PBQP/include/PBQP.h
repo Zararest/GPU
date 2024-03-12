@@ -19,7 +19,7 @@ struct Graph final {
   class Node;
 
   // Lhs{nL} CostMatrix{nL x nR} Rhs{nR} 
-  class Edge {
+  class Edge final {
     host::Matrix<Cost_t> CostMatrix;
     Node *Lhs = nullptr;
     Node *Rhs = nullptr;
@@ -36,7 +36,7 @@ struct Graph final {
     void print(std::ostream &OS) const;
   };
 
-  class Node {
+  class Node final {
     host::Matrix<Cost_t> CostVector;
     std::vector<Edge*> Edges;
     std::string Name;
@@ -126,6 +126,7 @@ public:
 
 struct Solver {
   virtual Solution solve(Graph Task) = 0;
+  virtual ~Solver() {}
 };
 
 } // namespace PBQP 
