@@ -1,5 +1,6 @@
 #include "PBQP.h"
 #include "CPU-solver.h"
+#include "GPU-solver.cu.h"
 
 #include <fstream>
 
@@ -42,4 +43,6 @@ int main() {
   
   auto SolutionStream = std::ofstream{"solution.dot"};
   Solution.print(SolutionStream);
+
+  PBQP::GPUSolver{}.solve(std::move(NewGraph));
 }
