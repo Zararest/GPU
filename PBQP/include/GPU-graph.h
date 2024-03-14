@@ -16,12 +16,18 @@ private:
   device::Matrix<Cost_t> *Costs = nullptr;
   unsigned NumOfCosts = 0;
 
+  // This vector stores cuda memory to be free
+  std::vector<device::Matrix<Cost_t>> CostMatrices;
+
 public:
   __host__
   Graph() = default;
 
   __host__
   Graph(const PBQP::Graph &HostGraph);
+
+  __host__
+  void free();
 };
 
 } // namespace device

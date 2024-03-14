@@ -257,11 +257,26 @@ void Graph::read(std::istream &IS) {
     parseNode(IS, AddrToNodeIdx);
 }
 
+const Graph &Solution::getGraph() const {
+  if (!isFinal())
+    utils::reportFatalError("Only final solution has graph");
+  return *InitialGraph; 
+}
+
+void Solution::makeFinal(Graph InitialGraphIn) {
+  if (isFinal())
+    utils::reportFatalError("Solution is already final");
+  InitialGraph = std::move(InitialGraphIn);
+}
+
 void Solution::print(std::ostream &OS) const {
+  if (!isFinal())
+    utils::reportFatalError("Only final solution might be printed");
+
   OS << "graph Dump {\n" <<
         "node[" <<  SolutionColour << "]\n";
-  auto Beg = InitialGraph.nodesBeg();
-  auto End = InitialGraph.nodesEnd();
+  auto Beg = InitialGraph->nodesBeg();
+  auto End = InitialGraph->nodesEnd();
   for (size_t Idx = 0; Beg != End; ++Idx, ++Beg) {
     assert(SelectedVariants.find(Idx) != SelectedVariants.end());
     OS << "\"" << Beg->get() << "\" [label = \"" <<
@@ -269,8 +284,8 @@ void Solution::print(std::ostream &OS) const {
     "\"]\n";
   }      
 
-  for (auto &Edge : utils::makeRange(InitialGraph.edgesBeg(),
-                                      InitialGraph.edgesEnd()) ) {
+  for (auto &Edge : utils::makeRange(InitialGraph->edgesBeg(),
+                                      InitialGraph->edgesEnd()) ) {
     assert(Edge);
     auto [Lhs, Rhs] = Edge->getNodes();
     OS << "\"" << Lhs << "\" -- \"" << Rhs << "\" [label = \"";

@@ -5,7 +5,7 @@
 
 namespace PBQP {
 
-struct GPUSolver final : public Solver {
+struct GPUSolver : public Solver {
   struct Pass {
     struct Result {
       virtual ~Result() = 0;
@@ -24,38 +24,48 @@ struct GPUSolver final : public Solver {
 
   public:
     void addPass(Pass_t Pass);
-    Solution run(const Graph &Graph);
+    Solution run(Graph Graph);
   };
 
   Solution solve(Graph Task) override;
+
+  class FinalSolution final : public Result {
+    Solution Sol;
+
+  public:
+    FinalSolution(Solution NewSolution) : Sol{std::move(NewSolution)} {}
+
+    Solution getFinalSolution(Graph Graph) {
+      Sol.makeFinal(std::move(Graph));
+      return std::move(Sol);
+    }
+  };
+
+  struct FinalPass : public Pass {
+
+    virtual Solution getSolution(const Graph &Graph, Res_t PrevResult) = 0;
+
+    Res_t run(const Graph &Graph, Res_t PrevResult) {
+      auto Solution = this->getSolution(Graph, std::move(PrevResult));
+      return Res_t{new FinalSolution(std::move(Solution))};
+    }
+    
+    virtual ~FinalPass() {}
+  };
 };
 
-class FinalSolution final : public GPUSolver::Pass::Result {
-  Solution Sol;
+struct Mock final : public GPUSolver::FinalPass {
+  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
+    return Solution{};
+  }
+};
+
+class GPUFullSearch final : GPUSolver::FinalPass {
+  Solution getBestOption(const Graph &Graph);
 
 public:
-  FinalSolution(Solution NewSolution) : Sol{std::move(NewSolution)} {}
-
-  Solution getSolution() {
-    return std::move(Sol);
-  }
-};
-
-struct FinalPass : public GPUSolver::Pass {
-
-  virtual Solution getSolution(const Graph &Graph, Res_t PrevResult) = 0;
-
-  Res_t run(const Graph &Graph, Res_t PrevResult) {
-    auto Solution = this->getSolution(Graph, std::move(PrevResult));
-    return Res_t{new FinalSolution(std::move(Solution))};
-  }
-  
-  virtual ~FinalPass() {}
-};
-
-struct Mock final : public FinalPass {
   Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
-    return Solution{Graph::copy(Graph)};
+    return getBestOption(Graph);
   }
 };
 

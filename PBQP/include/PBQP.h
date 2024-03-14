@@ -9,6 +9,7 @@
 #include <string_view>
 #include <utility>
 #include <map>
+#include <optional>
 
 namespace PBQP {
 
@@ -79,6 +80,15 @@ private:
   static bool edgeHasNode(const Edge &Edge, const Node &Node);
 
 public:
+  // For better error handling
+  Graph() = default;
+  Graph(const Graph &) = delete;
+  Graph(Graph&&) = default;
+  ~Graph() = default;
+
+  Graph &operator=(const Graph&) = delete;
+  Graph &operator=(Graph&&) = default;
+
   Node &addNode(host::Matrix<Cost_t> CostVector) {
     Nodes.emplace_back(std::make_unique<Node>(std::move(CostVector)));
     return *Nodes.back();
@@ -107,16 +117,20 @@ public:
 };
 
 class Solution final {
-  Graph InitialGraph;
+  // intermediate solution might have no graph in it
+  std::optional<Graph> InitialGraph;
   //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
   static constexpr std::string_view SolutionColour = 
     "color=red, fontsize=14, style=filled, shape=oval";
 
 public:
+  Solution() = default;
   Solution(Graph InitialGraph) : InitialGraph{std::move(InitialGraph)} {}
 
-  const Graph &getGraph() const { return InitialGraph; }
+  bool isFinal() const { return InitialGraph.has_value();}
+  void makeFinal(Graph InitialGraphIn);
+  const Graph &getGraph() const;
   void clear() { SelectedVariants.clear(); }
   bool addSelection(size_t NodeIdx, size_t Select) {
     return SelectedVariants.insert({NodeIdx, Select}).second;

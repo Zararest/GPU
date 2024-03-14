@@ -4,7 +4,7 @@
 
 namespace {
 template <typename T>
-T *copyVectorToCuda(std::vector<T> Vect) {
+T *copyVectorToCuda(const std::vector<T> &Vect) {
   T *CostsPtr = nullptr;
   CUDA_CHECK(cudaMalloc((void **)&CostsPtr, Vect.size() * sizeof(T)));
   for (size_t Idx = 0; Idx < Vect.size(); ++Idx)
@@ -33,7 +33,6 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
     return std::make_pair(NodeAddrToIdx[Lhs], NodeAddrToIdx[Rhs]);
   };
 
-  auto CostMatrices = std::vector<device::Matrix<Cost_t>>{};
   auto HostAdjMatrix = host::Matrix<Index_t>{};
   std::fill(HostAdjMatrix.begin(), HostAdjMatrix.end(), -1);
   for (auto &Edge : utils::makeRange(HostGraph.edgesBeg(), 
@@ -53,7 +52,14 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
   }
 
   NumOfCosts = CostMatrices.size();
-  Costs = copyVectorToCuda(std::move(CostMatrices));
+  Costs = copyVectorToCuda(CostMatrices);
+}
+
+__host__
+void Graph::free() {
+  AdjMatrix.free();
+  for (auto &DevMatr : CostMatrices)
+    DevMatr.free();
 }
 
 } // namespace device
