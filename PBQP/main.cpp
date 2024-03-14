@@ -44,5 +44,5 @@ int main() {
   auto SolutionStream = std::ofstream{"solution.dot"};
   Solution.print(SolutionStream);
 
-  PBQP::GPUSolver{}.solve(std::move(NewGraph));
+  PBQP::GPUFullSearch{}.solve(std::move(NewGraph));
 }

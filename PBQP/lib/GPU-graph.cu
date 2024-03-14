@@ -33,7 +33,8 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
     return std::make_pair(NodeAddrToIdx[Lhs], NodeAddrToIdx[Rhs]);
   };
 
-  auto HostAdjMatrix = host::Matrix<Index_t>{};
+  auto HostAdjMatrix = host::Matrix<Index_t>{HostGraph.size(), 
+                                             HostGraph.size()};
   std::fill(HostAdjMatrix.begin(), HostAdjMatrix.end(), -1);
   for (auto &Edge : utils::makeRange(HostGraph.edgesBeg(), 
                                      HostGraph.edgesEnd())) {
@@ -60,6 +61,7 @@ void Graph::free() {
   AdjMatrix.free();
   for (auto &DevMatr : CostMatrices)
     DevMatr.free();
+  CUDA_CHECK(cudaFree(Costs));
 }
 
 } // namespace device

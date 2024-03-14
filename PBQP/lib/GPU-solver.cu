@@ -2,6 +2,55 @@
 
 namespace PBQP {
 
+namespace {
+
+// Class for passing device::Graph through PassManager
+struct GPUGraph final : public GPUSolver::Pass::Result {
+  device::Graph Graph;
+
+  GPUGraph(const PBQP::Graph &HostGraph) : Graph{HostGraph} {}
+};
+
+struct GPUResult final : public GPUSolver::Pass::Result {
+  device::Graph Graph;
+  Solution Sol;
+
+  GPUResult(device::Graph Graph, Solution Sol = Solution{}) : Graph{Graph},
+                                                              Sol{std::move(Sol)} {}
+};
+
+// Pass which creates device::Graph and passes it further
+struct GraphLoader final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    return Res_t{new GPUGraph(Graph)};
+  }
+};
+
+// Pass which finds optimal solution with full search 
+//  on GPU graph received from previous pass
+class FullSearchImpl final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    auto *GPUGraphPtr = dynamic_cast<GPUGraph *>(PrevResult.get());
+    if (!GPUGraphPtr)
+      utils::reportFatalError("Graph hasn't been loaded to GPU");
+    // FIXME: add search on GPU graph
+    return Res_t{new GPUResult(GPUGraphPtr->Graph, Solution{})};
+  }
+};
+
+// Final pass which frees GPU memory
+struct GraphDeleter final : public GPUSolver::FinalPass {
+  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
+    auto *GPURes = dynamic_cast<GPUResult *>(PrevResult.get());
+    if (!GPURes)
+      utils::reportFatalError("There is no GPU solvers in PM");
+    GPURes->Graph.free();
+    return std::move(GPURes->Sol);
+  }
+};
+
+} // anonymous namespace
+
 GPUSolver::Pass::Result::~Result() {}
 
 void GPUSolver::PassManager::addPass(Pass_t Pass) {
@@ -22,47 +71,14 @@ Solution GPUSolver::PassManager::run(Graph Graph) {
 
 Solution GPUSolver::solve(Graph Task) {
   auto PM = PassManager{};
-  PM.addPass(Pass_t{new Mock});
-
+  this->addPasses(PM);
   return PM.run(std::move(Task));           
 }
 
-namespace {
-
-// Class for passing device::Graph through PassManager
-struct GPUGraph final : public GPUSolver::Pass::Result {
-  device::Graph Graph;
-
-  GPUGraph(const PBQP::Graph &HostGraph) : Graph{HostGraph} {}
-};
-
-// Pass which creates device::Graph and passes it further
-class GraphLoader final : public GPUSolver::Pass {
-  GPUGraph *loadGraphToGPU(const Graph &Graph) {
-    return new GPUGraph(Graph);
-  }
-
-public:
-  Res_t run(const Graph &Graph, Res_t PrevResult) override {
-    return Res_t{loadGraphToGPU(Graph)};
-  }
-};
-
-
-class FullSearchImpl final : public FinalPass {
-  
-  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
-    auto *GPUGraph = dynamic_cast<GPUGraph *>(PrevResult.get());
-    if (!GPUGraph)
-      utils::reportFatalError("Graph hasn't been loaded to GPU");
-    
-  }
-};
-
-} // anonymous namespace
-
-Solution GPUFullSearch::getBestOption(const Graph &Graph) {
-  
+void GPUFullSearch::addPasses(PassManager &PM) {
+  PM.addPass(Pass_t{new GraphLoader});
+  PM.addPass(Pass_t{new FullSearchImpl});
+  PM.addPass(Pass_t{new GraphDeleter});
 }
 
 } // namespace PBQP

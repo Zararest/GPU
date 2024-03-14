@@ -5,7 +5,9 @@
 
 namespace PBQP {
 
+// Base for every GPU solver
 struct GPUSolver : public Solver {
+  // Class for graph transformation
   struct Pass {
     struct Result {
       virtual ~Result() = 0;
@@ -18,7 +20,8 @@ struct GPUSolver : public Solver {
   };
 
   using Pass_t = std::unique_ptr<Pass>;
-
+  
+  // Class to run all transformations
   class PassManager final {
     std::vector<Pass_t> Passes;
 
@@ -27,9 +30,9 @@ struct GPUSolver : public Solver {
     Solution run(Graph Graph);
   };
 
-  Solution solve(Graph Task) override;
-
-  class FinalSolution final : public Result {
+  // Wrapper for PBQP::Solution.
+  // Last pass in pipeline should return this object as a result.
+  class FinalSolution final : public Pass::Result {
     Solution Sol;
 
   public:
@@ -41,7 +44,8 @@ struct GPUSolver : public Solver {
     }
   };
 
-  struct FinalPass : public Pass {
+  // Last pass in a pipeline
+  struct FinalPass : public Pass { 
 
     virtual Solution getSolution(const Graph &Graph, Res_t PrevResult) = 0;
 
@@ -52,21 +56,29 @@ struct GPUSolver : public Solver {
     
     virtual ~FinalPass() {}
   };
+
+  // Extension point for derivative classes
+  virtual void addPasses(PassManager &PM) = 0;
+  Solution solve(Graph Task) override;
+  virtual ~GPUSolver() {}
 };
 
-struct Mock final : public GPUSolver::FinalPass {
-  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
-    return Solution{};
+// Mock solver
+struct GPUMock final : public GPUSolver {
+  struct FinalPass : public GPUSolver::FinalPass {
+    Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
+      return Solution{};
+    }
+  };
+
+  void addPasses(PassManager &PM) override {
+    PM.addPass(Pass_t{new FinalPass});
   }
 };
 
-class GPUFullSearch final : GPUSolver::FinalPass {
-  Solution getBestOption(const Graph &Graph);
-
-public:
-  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
-    return getBestOption(Graph);
-  }
+// GPU solver with full search of optimal solution
+struct GPUFullSearch final : public GPUSolver {
+  void addPasses(PassManager &PM) override;
 };
 
 } // namespace PBQP
