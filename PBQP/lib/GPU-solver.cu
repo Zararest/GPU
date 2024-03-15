@@ -1,8 +1,17 @@
 #include "GPU-solver.cu.h"
 
+#include <thrust/device_vector.h>
+
 namespace PBQP {
 
 namespace {
+
+__global__
+void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto ThreadGlobId = blockIdx.x * blockDim.x + threadIdx.x;
+  printf("%i\n", ThreadGlobId);
+}
 
 // Class for passing device::Graph through PassManager
 struct GPUGraph final : public GPUSolver::Pass::Result {
@@ -29,12 +38,31 @@ struct GraphLoader final : public GPUSolver::Pass {
 // Pass which finds optimal solution with full search 
 //  on GPU graph received from previous pass
 class FullSearchImpl final : public GPUSolver::Pass {
+  static constexpr size_t BlockSize = 32;
+
+  Solution findSolutionWithMinCost(device::Graph &Graph, 
+                                   thrust::device_vector<Graph::Cost_t> Costs) {
+    return Solution{};
+  }
+
+  Solution getOptimalSolution(device::Graph &Graph) {
+    auto NumOfCombinations = Graph.getNumOfCostCombinations();
+    thrust::device_vector<Graph::Cost_t> 
+      AllCosts(NumOfCombinations, Graph::InfCost);
+    dim3 ThrBlockDim{BlockSize};
+    dim3 BlockGridDim{utils::ceilDiv(NumOfCombinations, ThrBlockDim.x)};
+    __calcCosts<<<BlockGridDim, ThrBlockDim>>>
+      (Graph, thrust::raw_pointer_cast(AllCosts.data()));
+    return findSolutionWithMinCost(Graph, std::move(AllCosts));
+  }
+
+public:
   Res_t run(const Graph &Graph, Res_t PrevResult) override {
     auto *GPUGraphPtr = dynamic_cast<GPUGraph *>(PrevResult.get());
     if (!GPUGraphPtr)
       utils::reportFatalError("Graph hasn't been loaded to GPU");
-    // FIXME: add search on GPU graph
-    return Res_t{new GPUResult(GPUGraphPtr->Graph, Solution{})};
+    return Res_t{new GPUResult(GPUGraphPtr->Graph, 
+                               getOptimalSolution(GPUGraphPtr->Graph))};
   }
 };
 

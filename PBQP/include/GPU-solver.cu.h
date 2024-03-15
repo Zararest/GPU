@@ -77,7 +77,7 @@ struct GPUMock final : public GPUSolver {
 };
 
 // GPU solver with full search of optimal solution
-struct GPUFullSearch final : public GPUSolver {
+struct GPUFullSearch final : public GPUSolver {  
   void addPasses(PassManager &PM) override;
 };
 

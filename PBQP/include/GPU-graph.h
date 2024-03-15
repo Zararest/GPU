@@ -9,15 +9,23 @@ struct Graph final {
   using Index_t = int;
 
 private:
+  static constexpr Index_t NoEdge = -1;
   // AdjMatrix[i][j] - index in the cost records or -1 
   //  if there is no edge between nodes
   // AdjMatrix[i][i] - cost vector of a node i
   device::Matrix<Index_t> AdjMatrix;
+  host::Matrix<Index_t> HostAdjMatrix;
   device::Matrix<Cost_t> *Costs = nullptr;
   unsigned NumOfCosts = 0;
 
   // This vector stores cuda memory to be free
   std::vector<device::Matrix<Cost_t>> CostMatrices;
+
+  __host__
+  void fillAdjMatrix(size_t I, size_t J, Index_t Val) {
+    HostAdjMatrix[I][J] = Val;
+    HostAdjMatrix[J][I] = Val;
+  }
 
 public:
   __host__
@@ -28,6 +36,24 @@ public:
 
   __host__
   void free();
+
+  __host__
+  size_t getNumOfCostCombinations() const;
+
+  __device__
+  device::Matrix<Index_t> &getAdjMatrix() {
+    return AdjMatrix;
+  }
+
+  __device__ 
+  device::Matrix<Cost_t> *getCosts() {
+    return Costs;
+  }
+
+  __device__ 
+  unsigned getNumOfCosts() const {
+    return NumOfCosts;
+  }
 };
 
 } // namespace device

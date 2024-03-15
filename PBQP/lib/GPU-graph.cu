@@ -33,22 +33,21 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
     return std::make_pair(NodeAddrToIdx[Lhs], NodeAddrToIdx[Rhs]);
   };
 
-  auto HostAdjMatrix = host::Matrix<Index_t>{HostGraph.size(), 
-                                             HostGraph.size()};
-  std::fill(HostAdjMatrix.begin(), HostAdjMatrix.end(), -1);
+  HostAdjMatrix = host::Matrix<Index_t>{HostGraph.size(), 
+                                        HostGraph.size()};
+  std::fill(HostAdjMatrix.begin(), HostAdjMatrix.end(), NoEdge);
   for (auto &Edge : utils::makeRange(HostGraph.edgesBeg(), 
                                      HostGraph.edgesEnd())) {
     auto [Lhs, Rhs] = Edge->getNodes();
     auto [LhsIdx, RhsIdx] = GetIndexes(Lhs, Rhs);
-    HostAdjMatrix[LhsIdx][RhsIdx] = CostMatrices.size();
-    HostAdjMatrix[RhsIdx][LhsIdx] = CostMatrices.size();
+    fillAdjMatrix(LhsIdx, RhsIdx, CostMatrices.size());
     CostMatrices.emplace_back(Edge->getCostMatrix());
   }
 
   for (auto &Node : utils::makeRange(HostGraph.nodesBeg(), 
                                      HostGraph.nodesEnd())) {
     auto [NodeIdx, _] = GetIndexes(Node.get(), Node.get());
-    HostAdjMatrix[NodeIdx][NodeIdx] = CostMatrices.size();
+    fillAdjMatrix(NodeIdx, NodeIdx, CostMatrices.size());
     CostMatrices.emplace_back(Node->getCostVector());
   }
 
@@ -62,6 +61,22 @@ void Graph::free() {
   for (auto &DevMatr : CostMatrices)
     DevMatr.free();
   CUDA_CHECK(cudaFree(Costs));
+}
+
+__host__
+size_t Graph::getNumOfCostCombinations() const {
+  auto NumOfVariants = 1ull;
+  assert(HostAdjMatrix.h() == HostAdjMatrix.w());
+  for (size_t NodeIdx = 0; NodeIdx < HostAdjMatrix.h(); ++NodeIdx) {
+    auto CostIdx = HostAdjMatrix[NodeIdx][NodeIdx];
+    if (CostIdx != NoEdge) {
+      assert(CostIdx < CostMatrices.size());
+      assert(CostMatrices[CostIdx].w() == 1);
+      NumOfVariants *= CostMatrices[CostIdx].h();
+    }
+  }
+  assert(NumOfVariants != 0);
+  return NumOfVariants;
 }
 
 } // namespace device
