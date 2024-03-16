@@ -1,6 +1,7 @@
 #include "GPU-solver.cu.h"
 
 #include <thrust/device_vector.h>
+#include <thrust/extrema.h>
 
 namespace PBQP {
 
@@ -8,9 +9,34 @@ namespace {
 
 __global__
 void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts) {
+  // This should be stored in local memory
   auto &AdjMatrix = Graph.getAdjMatrix();
-  auto ThreadGlobId = blockIdx.x * blockDim.x + threadIdx.x;
-  printf("%i\n", ThreadGlobId);
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  auto LhsChoicesLeft = GlobalId;
+  auto RhsChoicesLeft = LhsChoicesLeft;
+  auto NumOfNodes = AdjMatrix.h();
+  auto Cost = Graph::Cost_t{0};
+  for (unsigned LhsNodeIdx = 0; LhsNodeIdx < NumOfNodes; ++LhsNodeIdx) {
+    auto LhsCostIdx = AdjMatrix[LhsNodeIdx][LhsNodeIdx];
+    auto &LhsCostVect = Graph.getCostMatrix(LhsCostIdx);
+    assert(LhsCostVect.w() == 1);
+    auto LhsChoice = LhsChoicesLeft % LhsCostVect.h();
+    LhsChoicesLeft /= LhsCostVect.h();
+    Cost += LhsCostVect[LhsChoice][0];
+    RhsChoicesLeft = LhsChoicesLeft;
+    for (unsigned RhsNodeIdx = LhsNodeIdx + 1; RhsNodeIdx < NumOfNodes; ++RhsNodeIdx) {
+      auto AdjCostIdx = AdjMatrix[LhsNodeIdx][RhsNodeIdx];
+      auto RhsCostSize = Graph.getCostMatrix(AdjMatrix[RhsNodeIdx][RhsNodeIdx]).h();
+      if (AdjCostIdx >= 0) {
+        auto RhsChoice = RhsChoicesLeft % RhsCostSize;
+        Cost += Graph.getCostMatrix(AdjCostIdx)[LhsChoice][RhsChoice];
+      }
+      RhsChoicesLeft /= RhsCostSize;
+    }
+  }
+  // FXME
+  if (GlobalId < 9)
+    AllCosts[GlobalId] = Cost;
 }
 
 // Class for passing device::Graph through PassManager
@@ -40,9 +66,23 @@ struct GraphLoader final : public GPUSolver::Pass {
 class FullSearchImpl final : public GPUSolver::Pass {
   static constexpr size_t BlockSize = 32;
 
+  Solution getSolutionByIndex(device::Graph &Graph, unsigned SelectedVariant) {
+    auto Res = Solution{};
+    for (unsigned NodeIdx = 0; NodeIdx < Graph.size(); ++NodeIdx) {
+      auto NodeCostSize = Graph.getNodeCostSize(NodeIdx);
+      Res.addSelection(NodeIdx, SelectedVariant % NodeCostSize);
+      SelectedVariant /= NodeCostSize;
+    }
+    return Res;
+  }
+
   Solution findSolutionWithMinCost(device::Graph &Graph, 
                                    thrust::device_vector<Graph::Cost_t> Costs) {
-    return Solution{};
+    //thrust::copy(Costs.begin(), Costs.end(), std::ostream_iterator<float>(std::cout, " "));
+    auto MinElemIt = thrust::min_element(Costs.begin(), Costs.end());
+    assert(MinElemIt != Costs.end());
+    auto MinElemIdx = std::distance(Costs.begin(), MinElemIt);
+    return getSolutionByIndex(Graph, MinElemIdx);
   }
 
   Solution getOptimalSolution(device::Graph &Graph) {
@@ -53,6 +93,8 @@ class FullSearchImpl final : public GPUSolver::Pass {
     dim3 BlockGridDim{utils::ceilDiv(NumOfCombinations, ThrBlockDim.x)};
     __calcCosts<<<BlockGridDim, ThrBlockDim>>>
       (Graph, thrust::raw_pointer_cast(AllCosts.data()));
+    cudaDeviceSynchronize();
+    utils::checkKernelsExec();
     return findSolutionWithMinCost(Graph, std::move(AllCosts));
   }
 

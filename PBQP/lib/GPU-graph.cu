@@ -53,6 +53,7 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
 
   NumOfCosts = CostMatrices.size();
   Costs = copyVectorToCuda(CostMatrices);
+  AdjMatrix = device::Matrix<Index_t>{HostAdjMatrix};
 }
 
 __host__

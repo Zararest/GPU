@@ -40,14 +40,29 @@ public:
   __host__
   size_t getNumOfCostCombinations() const;
 
+  __host__
+  size_t getNodeCostSize(unsigned NodeIdx) const {
+    assert(NodeIdx < HostAdjMatrix.h());
+    auto CostIdx = HostAdjMatrix[NodeIdx][NodeIdx];
+    return CostMatrices[CostIdx].h();
+  }
+
+  __host__
+  size_t size() const {
+    assert(HostAdjMatrix.h() == HostAdjMatrix.w());
+    return HostAdjMatrix.h();
+  }
+
   __device__
   device::Matrix<Index_t> &getAdjMatrix() {
     return AdjMatrix;
   }
 
   __device__ 
-  device::Matrix<Cost_t> *getCosts() {
-    return Costs;
+  device::Matrix<Cost_t> &getCostMatrix(Index_t Index) {
+    assert(Index >= 0);
+    assert(Index < NumOfCosts);
+    return Costs[Index];
   }
 
   __device__ 
