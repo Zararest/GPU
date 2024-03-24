@@ -8,7 +8,7 @@ namespace PBQP {
 namespace {
 
 __global__
-void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts) {
+void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts, unsigned NumOfCombinations) {
   // This should be stored in local memory
   auto &AdjMatrix = Graph.getAdjMatrix();
   auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
@@ -34,8 +34,8 @@ void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts) {
       RhsChoicesLeft /= RhsCostSize;
     }
   }
-  // FXME
-  if (GlobalId < 9)
+
+  if (GlobalId < NumOfCombinations)
     AllCosts[GlobalId] = Cost;
 }
 
@@ -92,7 +92,7 @@ class FullSearchImpl final : public GPUSolver::Pass {
     dim3 ThrBlockDim{BlockSize};
     dim3 BlockGridDim{utils::ceilDiv(NumOfCombinations, ThrBlockDim.x)};
     __calcCosts<<<BlockGridDim, ThrBlockDim>>>
-      (Graph, thrust::raw_pointer_cast(AllCosts.data()));
+      (Graph, thrust::raw_pointer_cast(AllCosts.data()), NumOfCombinations);
     cudaDeviceSynchronize();
     utils::checkKernelsExec();
     return findSolutionWithMinCost(Graph, std::move(AllCosts));

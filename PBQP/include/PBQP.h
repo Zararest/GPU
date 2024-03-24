@@ -100,6 +100,7 @@ public:
   }
 
   static Graph copy(const Graph &OldGraph);
+  static Graph merge(const Graph &LhsClique, const Graph &RhsClique);
 
   size_t size() const { return Nodes.size(); }
   auto nodesBeg() const { return Nodes.begin(); }

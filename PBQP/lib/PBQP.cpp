@@ -68,7 +68,8 @@ Graph Graph::copy(const Graph &OldGraph) {
                  std::back_inserter(NewGraph.Nodes), 
                  [](const auto &NodePtr) {
                     assert(NodePtr);
-                    return std::make_unique<Node>(NodePtr->getCostVector());
+                    return std::make_unique<Node>(NodePtr->getCostVector(), 
+                                                  NodePtr->getName());
                  });
   auto NodeAddrToIdx = std::unordered_map<Node *, size_t>{};
   for (size_t Idx = 0; Idx < OldGraph.Nodes.size(); ++Idx)
@@ -84,6 +85,32 @@ Graph Graph::copy(const Graph &OldGraph) {
     NewGraph.addEdge(*LhsNodePtr, Edge->getCostMatrix(), *RhsNodePtr);
   } 
   return NewGraph;
+}
+
+Graph Graph::merge(const Graph &LhsClique, const Graph &RhsClique) {
+  auto NewLhs = Graph::copy(LhsClique);
+  auto NewRhs = Graph::copy(RhsClique);
+  auto FinalGraph = Graph{};
+  auto MoveNode = [](std::unique_ptr<Node> &Node) {
+    return std::move(Node);
+  };
+  auto MoveEdge = [](std::unique_ptr<Edge> &Edge) {
+    return std::move(Edge);
+  };
+  std::transform(NewLhs.Nodes.begin(), NewLhs.Nodes.end(), 
+                 std::back_inserter(FinalGraph.Nodes), 
+                 MoveNode);
+  std::transform(NewLhs.Edges.begin(), NewLhs.Edges.end(), 
+                 std::back_inserter(FinalGraph.Edges), 
+                 MoveEdge);
+
+  std::transform(NewRhs.Nodes.begin(), NewRhs.Nodes.end(), 
+                 std::back_inserter(FinalGraph.Nodes), 
+                 MoveNode);
+  std::transform(NewRhs.Edges.begin(), NewRhs.Edges.end(), 
+                 std::back_inserter(FinalGraph.Edges), 
+                 MoveEdge);
+  return FinalGraph;  
 }
 
 bool Graph::nodeHasEdge(const Node &Node, const Edge &Edge) {

@@ -93,10 +93,10 @@ struct Edge {
 };
 
 size_t chooseNode(const std::set<size_t> &Nodes, 
-                  std::uniform_int_distribution<size_t> &NeibDist, 
+                  std::uniform_int_distribution<size_t> &NeighbDist, 
                   std::mt19937 &Rng) {
   assert(Nodes.size());
-  auto NodePos = NeibDist(Rng) % Nodes.size();
+  auto NodePos = NeighbDist(Rng) % Nodes.size();
   auto NodeIt = Nodes.begin();
   std::advance(NodeIt, NodePos);
   assert(NodeIt != Nodes.end());
@@ -106,17 +106,17 @@ size_t chooseNode(const std::set<size_t> &Nodes,
 std::vector<Edge> generateNewLevel(const std::set<size_t> &Visited, 
                       const std::set<size_t> &NotVisited,
                       const std::set<size_t> &CurrentlyVisited,
-                      size_t CurNumOfNeib, size_t CurNumOfVisitiees,
-                      std::uniform_int_distribution<size_t> &NeibDist, 
+                      size_t CurNumOfNeighb, size_t CurNumOfVisitiees,
+                      std::uniform_int_distribution<size_t> &NeighbDist, 
                       std::mt19937 &Rng) {
-  assert(CurNumOfVisitiees <= CurNumOfNeib);
+  assert(CurNumOfVisitiees <= CurNumOfNeighb);
   auto NewEdges = std::vector<Edge>{};
   auto CurrentNotVisited = utils::sub(NotVisited, CurrentlyVisited);
   
   for (size_t i = 0; i < std::min(CurNumOfVisitiees, 
                                   CurrentNotVisited.size()); ++i) {
-    auto From = chooseNode(CurrentlyVisited, NeibDist, Rng);
-    auto To = chooseNode(CurrentNotVisited, NeibDist, Rng);
+    auto From = chooseNode(CurrentlyVisited, NeighbDist, Rng);
+    auto To = chooseNode(CurrentNotVisited, NeighbDist, Rng);
     CurrentNotVisited.erase(To);
     NewEdges.emplace_back(From, To);
   }
@@ -124,9 +124,9 @@ std::vector<Edge> generateNewLevel(const std::set<size_t> &Visited,
   if (Visited.size() == 0)
     return NewEdges;
 
-  for (size_t i = 0; i < (CurNumOfNeib - CurNumOfVisitiees); ++i) {
-    auto From = chooseNode(CurrentlyVisited, NeibDist, Rng);
-    auto To = chooseNode(Visited, NeibDist, Rng);
+  for (size_t i = 0; i < (CurNumOfNeighb - CurNumOfVisitiees); ++i) {
+    auto From = chooseNode(CurrentlyVisited, NeighbDist, Rng);
+    auto To = chooseNode(Visited, NeighbDist, Rng);
     NewEdges.emplace_back(From, To);
   }
   return NewEdges;
@@ -166,12 +166,12 @@ GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum = 2000,
   auto Visited = std::set<size_t>{};
   auto NotVisited = std::set<size_t>{};
   auto Rng = std::mt19937(Seed);
-  auto NeibNumDist = 
+  auto NeighbNumDist = 
     std::normal_distribution<>{AverageNeighboursNum, AverageNeighboursNum / 2};
   auto VisiteesNum = 
     std::normal_distribution<>{AverageBFSVisiteesNum, 
                              AverageBFSVisiteesNum / 2};
-  auto NeibDist = std::uniform_int_distribution<size_t>{0, Size};
+  auto NeighbDist = std::uniform_int_distribution<size_t>{0, Size};
 
   // I don't know better way to do this
   for (size_t NodeNum = 0; NodeNum < Size; ++NodeNum)
@@ -183,14 +183,14 @@ GraphGenRes generateGraph(size_t Size, double AverageNeighboursNum = 2000,
   auto CurrentlyVisited = std::set<size_t>{Root};
   auto Level = 1ul;
   while (NotVisited.size() > 0) {
-    auto CurNumOfNeib = 
-      static_cast<size_t>(std::ceil(std::abs(NeibNumDist(Rng))));
+    auto CurNumOfNeighb = 
+      static_cast<size_t>(std::ceil(std::abs(NeighbNumDist(Rng))));
     auto CurNumOfVisitiees = 
-      static_cast<size_t>(std::ceil(std::abs(VisiteesNum(Rng)))) % CurNumOfNeib;
+      static_cast<size_t>(std::ceil(std::abs(VisiteesNum(Rng)))) % CurNumOfNeighb;
     CurNumOfVisitiees = CurNumOfVisitiees ? CurNumOfVisitiees : 1;
     auto NewEdges = generateNewLevel(Visited, NotVisited, CurrentlyVisited,
-                                     CurNumOfNeib, CurNumOfVisitiees,
-                                     NeibDist, Rng);
+                                     CurNumOfNeighb, CurNumOfVisitiees,
+                                     NeighbDist, Rng);
 
     fillGraph(Graph, NewEdges.begin(), NewEdges.end());
     fillVisitSets(Visited, NotVisited, CurrentlyVisited, 
