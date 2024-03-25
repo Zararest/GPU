@@ -7,6 +7,7 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 #define DEBUG
 
@@ -104,7 +105,7 @@ private:
     if (Type == Type::Flag && (Arg == "false" || Arg == "true"))
       return {++Beg, Arg};
     if (Type == Type::Flag)
-      return {Beg, "false"};
+      return {Beg, "true"};
     if (Type == Type::String)
       return {++Beg, Arg};
     reportFatalError("Unreachable");
@@ -170,5 +171,10 @@ public:
     return "";
   }
 };
+
+template <typename T>
+size_t to_milliseconds(const T &Clck) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(Clck).count();
+}
 
 } // namespace utils

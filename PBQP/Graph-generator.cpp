@@ -1,6 +1,4 @@
 #include "Graph-gen.h"
-#include "CPU-solver.h"
-#include "GPU-solver.cu.h"
 
 #include <fstream>
 

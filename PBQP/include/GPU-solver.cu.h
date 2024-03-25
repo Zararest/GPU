@@ -22,22 +22,17 @@ struct GPUSolver : public Solver {
   using Pass_t = std::unique_ptr<Pass>;
   
   // Class to run all transformations
-  class PassManager final {
-    using Time_t = std::chrono::time_point<std::chrono::steady_clock>;
+  struct PassManager final {
+    using Profile_t = std::vector<std::pair<std::string, size_t>>;
+  private:
     std::vector<Pass_t> Passes;
-    std::vector<Time_t> Durations;
+    std::map<Pass *, size_t> PassPtrToDuration;
+    std::map<Pass *, std::string> PassPtrToName;
 
   public:
-    void addPass(Pass_t Pass);
+    void addPass(Pass_t Pass, std::string Name = "");
     Solution run(Graph Graph);
-    
-    auto durationsBeg() const {
-      return Durations.begin();
-    }
-
-    auto durationEnd() const {
-      return Durations.end();
-    }
+    Profile_t getProfileInfo() const;
   };
 
   // Wrapper for PBQP::Solution.
@@ -67,9 +62,16 @@ struct GPUSolver : public Solver {
     virtual ~FinalPass() {}
   };
 
+protected:
+  PassManager PM;
+
+public:
   // Extension point for derivative classes
   virtual void addPasses(PassManager &PM) = 0;
   Solution solve(Graph Task) override;
+  PassManager::Profile_t getProfileInfo() const {
+    return PM.getProfileInfo();
+  }
   virtual ~GPUSolver() {}
 };
 

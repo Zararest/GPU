@@ -124,14 +124,20 @@ struct GraphDeleter final : public GPUSolver::FinalPass {
 
 GPUSolver::Pass::Result::~Result() {}
 
-void GPUSolver::PassManager::addPass(Pass_t Pass) {
+void GPUSolver::PassManager::addPass(Pass_t Pass, std::string Name) {
+  if (Name == "")
+    Name = "Pass " + std::to_string(PassPtrToName.size());
+  PassPtrToName[Pass.get()] = Name;
   Passes.emplace_back(std::move(Pass));
 }
 
 Solution GPUSolver::PassManager::run(Graph Graph) {
   auto Res = Pass::Res_t{};
   for (auto &Pass : Passes) {
+    auto Start = std::chrono::steady_clock::now();
     Res = Pass->run(Graph, std::move(Res));
+    auto End = std::chrono::steady_clock::now();
+    PassPtrToDuration[Pass.get()] = utils::to_milliseconds(End - Start);
   }
   auto *SolutionPtr = dynamic_cast<FinalSolution *>(Res.get());
   if (!SolutionPtr)
@@ -140,15 +146,31 @@ Solution GPUSolver::PassManager::run(Graph Graph) {
   return SolutionPtr->getFinalSolution(std::move(Graph));
 }
 
+GPUSolver::PassManager::Profile_t
+GPUSolver::PassManager::getProfileInfo() const {
+  auto Res = std::vector<std::pair<std::string, size_t>>{};
+  std::transform(Passes.begin(), Passes.end(),
+                 std::back_inserter(Res),
+                 [&](const Pass_t &Pass) {
+                  auto PassPtr = Pass.get();
+                  auto NameIt = PassPtrToName.find(PassPtr);
+                  assert(NameIt != PassPtrToName.end());
+                  auto DurationIt = PassPtrToDuration.find(PassPtr);
+                  assert(DurationIt != PassPtrToDuration.end());
+                  return std::pair<std::string, size_t>{NameIt->second, 
+                                                        DurationIt->second};
+                 });
+  return Res;
+}
+
 Solution GPUSolver::solve(Graph Task) {
-  auto PM = PassManager{};
   this->addPasses(PM);
   return PM.run(std::move(Task));           
 }
 
 void GPUFullSearch::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new GraphLoader});
-  PM.addPass(Pass_t{new FullSearchImpl});
+  PM.addPass(Pass_t{new FullSearchImpl}, "GPU full search");
   PM.addPass(Pass_t{new GraphDeleter});
 }
 
