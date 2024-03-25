@@ -23,11 +23,21 @@ struct GPUSolver : public Solver {
   
   // Class to run all transformations
   class PassManager final {
+    using Time_t = std::chrono::time_point<std::chrono::steady_clock>;
     std::vector<Pass_t> Passes;
+    std::vector<Time_t> Durations;
 
   public:
     void addPass(Pass_t Pass);
     Solution run(Graph Graph);
+    
+    auto durationsBeg() const {
+      return Durations.begin();
+    }
+
+    auto durationEnd() const {
+      return Durations.end();
+    }
   };
 
   // Wrapper for PBQP::Solution.

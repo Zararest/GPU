@@ -302,6 +302,9 @@ void Solution::print(std::ostream &OS) const {
 
   OS << "graph Dump {\n" <<
         "node[" <<  SolutionColour << "]\n";
+
+  OS << "Solution:" << FinalCost << " [" << AnswerNodeColour << "]\n";
+
   auto Beg = InitialGraph->nodesBeg();
   auto End = InitialGraph->nodesEnd();
   for (size_t Idx = 0; Beg != End; ++Idx, ++Beg) {
@@ -315,9 +318,7 @@ void Solution::print(std::ostream &OS) const {
                                       InitialGraph->edgesEnd()) ) {
     assert(Edge);
     auto [Lhs, Rhs] = Edge->getNodes();
-    OS << "\"" << Lhs << "\" -- \"" << Rhs << "\" [label = \"";
-    Edge->print(OS);
-    OS << "\"]\n"; 
+    OS << "\"" << Lhs << "\" -- \"" << Rhs << "\"\n";
   }
   OS << "}\n";
 }

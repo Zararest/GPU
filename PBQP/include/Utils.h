@@ -5,6 +5,8 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 #include <set>
+#include <vector>
+#include <algorithm>
 
 #define DEBUG
 
@@ -75,5 +77,98 @@ std::set<T> sub(const std::set<size_t> &Lhs, const std::set<T> &Rhs) {
 }
 
 void reportFatalError(const std::string &Msg);
+
+struct CLOption final {
+  enum class Type {
+    Flag,
+    String
+  };
+
+private:
+  std::string Name;
+  Type Type;
+
+  bool matchName(const std::string &ArgName) const {
+    if (ArgName == Name || ArgName == "-" + Name || ArgName == "--" + Name)
+      return true;
+    return false;
+  }
+
+  template <typename It>
+  std::pair<It, std::string> getArg(It Beg, It End) const {
+    if (Beg == End && Type == Type::String)
+      utils::reportFatalError("Empty option [" + Name + "]");
+    if (Beg == End && Type == Type::Flag)
+      return {Beg, "false"};
+    auto Arg = *Beg;
+    if (Type == Type::Flag && (Arg == "false" || Arg == "true"))
+      return {++Beg, Arg};
+    if (Type == Type::Flag)
+      return {Beg, "false"};
+    if (Type == Type::String)
+      return {++Beg, Arg};
+    reportFatalError("Unreachable");
+    return {Beg, ""};
+  }
+
+public:
+  CLOption(const std::string &Name, enum Type Type) : Name{Name}, Type{Type} {}
+
+  // If option has been matched returns iterator and info
+  template <typename It>
+  std::pair<It, std::string> match(It Beg, It End) const {
+    if (Beg == End)
+      return {Beg, ""};
+    if (!matchName(*Beg))
+      return {Beg, ""};
+    ++Beg;
+    return getArg(Beg, End);
+  }
+
+  const std::string &getName() const {
+    return Name;
+  }
+};
+
+class CLParser final {
+  std::vector<std::string> Args;
+  std::vector<CLOption> Options;
+  std::vector<std::pair<CLOption, std::string>> ParsedOptions;
+public:
+  CLParser(int Argc, char **Argv) : Args(Argv + 1, Argv + Argc) {}
+
+  void addOption(const std::string &Name, enum CLOption::Type TypeVal) {
+    Options.emplace_back(Name, TypeVal);
+  }
+
+  bool parseOptions() {
+    auto ArgsEnd = Args.end();
+    for (auto It = Args.begin(); It != ArgsEnd;) {
+      auto PrevIt = It;
+      std::for_each(Options.begin(), Options.end(), 
+                    [&](const CLOption &Opt) {
+                      auto [NewIt, Val] = Opt.match(It, ArgsEnd);
+                      It = NewIt;
+                      if (Val != "")
+                        ParsedOptions.emplace_back(Opt, std::move(Val));
+                    });
+      if (PrevIt == It)
+        return false;
+    }
+    return true;
+  }
+
+  std::string getOption(const std::string &Name) {
+    auto It = std::find_if(ParsedOptions.begin(), ParsedOptions.end(),
+                            [&Name] (const auto &Opt) {
+                              if (Name == Opt.first.getName())
+                                return true;
+                              return false;
+                            });
+    if (It != ParsedOptions.end())
+      return It->second;
+    return "";
+  }
+};
 
 } // namespace utils

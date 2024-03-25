@@ -122,6 +122,9 @@ class Solution final {
   std::optional<Graph> InitialGraph;
   //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
+  Graph::Cost_t FinalCost = 0;
+  static constexpr std::string_view AnswerNodeColour =
+    "color=coral, fontsize=18, style=filled, shape=oval";
   static constexpr std::string_view SolutionColour = 
     "color=red, fontsize=14, style=filled, shape=oval";
 
@@ -135,6 +138,12 @@ public:
   void clear() { SelectedVariants.clear(); }
   bool addSelection(size_t NodeIdx, size_t Select) {
     return SelectedVariants.insert({NodeIdx, Select}).second;
+  }
+  void addFinalCost(Graph::Cost_t NewFinalCost) {
+    FinalCost = NewFinalCost;
+  }
+  Graph::Cost_t getFinalCost() const {
+    return FinalCost;
   }
   void print(std::ostream &OS) const;
 };

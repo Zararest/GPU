@@ -79,6 +79,7 @@ public:
     MinCost = Graph::InfCost;
     auto Buf = std::vector<size_t>{};
     checkAllOptions(Buf);
+    OptimalSolution->addFinalCost(MinCost);
     return std::move(*OptimalSolution.release());
   }
 };

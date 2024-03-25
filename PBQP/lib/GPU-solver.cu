@@ -78,11 +78,12 @@ class FullSearchImpl final : public GPUSolver::Pass {
 
   Solution findSolutionWithMinCost(device::Graph &Graph, 
                                    thrust::device_vector<Graph::Cost_t> Costs) {
-    //thrust::copy(Costs.begin(), Costs.end(), std::ostream_iterator<float>(std::cout, " "));
     auto MinElemIt = thrust::min_element(Costs.begin(), Costs.end());
     assert(MinElemIt != Costs.end());
     auto MinElemIdx = std::distance(Costs.begin(), MinElemIt);
-    return getSolutionByIndex(Graph, MinElemIdx);
+    auto Solution = getSolutionByIndex(Graph, MinElemIdx);
+    Solution.addFinalCost(*MinElemIt);
+    return Solution;
   }
 
   Solution getOptimalSolution(device::Graph &Graph) {
