@@ -198,14 +198,14 @@ static Graph::Cost_t getValue(std::istream &IS) {
   auto SS = std::stringstream{ValStr};
   auto Val = Graph::Cost_t{};
   if (!(SS >> Val))
-    utils::reportFatalError("Can't read a matrix's value");
+    utils::reportFatalError("Can't read a matrix's value [" + ValStr + "]");
   return Val;
 }
 
 static host::Matrix<Graph::Cost_t> parseMatrix(std::istream &IS) {
   auto Separator = std::string{};
   auto Hight = getSize(IS);
-  
+
   IS >> Separator;
   if (Separator != "x")
     utils::reportFatalError("Wrong matrix size separator");
@@ -231,6 +231,7 @@ static size_t getAddr(std::istream &IS) {
   auto Addr = 0ull;
   if (!(IS >> std::hex >> Addr))
     utils::reportFatalError("Can't read a node's address");
+  IS >> std::dec;
   return Addr;
 }
 

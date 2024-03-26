@@ -60,7 +60,7 @@ void checkSolution(const std::string &InFileName) {
   auto CPUAns = CPUSolver.solve(PBQP::Graph::copy(Graph));
   auto GPUAns = GPUSolver.solve(PBQP::Graph::copy(Graph));
 
-  if (CPUAns.getFinalCost() != GPUAns.getFinalCost())
+  if (!utils::isEqual(CPUAns.getFinalCost(), GPUAns.getFinalCost()))
     utils::reportFatalError("Differen answers: CPU[" + 
                             std::to_string(CPUAns.getFinalCost()) + "] GPU[" +
                             std::to_string(GPUAns.getFinalCost()) + "]");
@@ -102,19 +102,22 @@ int main(int Argc, char **Argv) {
   if (!UseCPU && !UseGPU)
     utils::reportFatalError("No solver has been specified");
 
+  auto OutString = std::string{};
   if (UseGPU) {
     auto Time = measureGPU(InFileName, OutFileName, OnlyTime);
-    auto OutString = std::to_string(Time) + "\n";
+    OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "GPU time: " + std::to_string(Time) + "ms]\n";
+      OutString = "GPU time: " + std::to_string(Time) + "ms\n";
   }
 
   if (UseCPU) {
     auto Time = measureCPU(InFileName, OutFileName);
-    auto OutString = std::to_string(Time) + "\n";
+    OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "CPU time: " + std::to_string(Time) + "ms]\n";
+      OutString = "CPU time: " + std::to_string(Time) + "ms\n";
   }
+
+  std::cout << OutString << std::endl;
 
   if (CheckSolution)
     checkSolution(InFileName);

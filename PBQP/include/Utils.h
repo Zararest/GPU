@@ -12,7 +12,7 @@
 #define DEBUG
 
 #ifdef DEBUG
-#define DEBUG_EXPR(expr) (expr)
+#define DEBUG_EXPR(expr) expr
 #else
 #define DEBUG_EXPR(expr)
 #endif
@@ -176,5 +176,7 @@ template <typename T>
 size_t to_milliseconds(const T &Clck) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(Clck).count();
 }
+
+bool isEqual(double Lhs, double Rhs);
 
 } // namespace utils

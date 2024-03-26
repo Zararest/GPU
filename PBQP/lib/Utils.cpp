@@ -41,4 +41,10 @@ void reportFatalError(const std::string &Msg) {
   exit(-1);
 }
 
+bool isEqual(double Lhs, double Rhs) {
+  constexpr auto e = 0.01;
+  auto Delta = Lhs * e;
+  return Rhs >= Lhs - Delta && Rhs <= Lhs + Delta;
+}
+
 } // namesapce utils

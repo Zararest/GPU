@@ -13,6 +13,8 @@ private:
   // AdjMatrix[i][j] - index in the cost records or -1 
   //  if there is no edge between nodes
   // AdjMatrix[i][i] - cost vector of a node i
+  // AdjMatrix is not symmetrical, 
+  //  because it indicates which node is Lhs and which is Rhs
   device::Matrix<Index_t> AdjMatrix;
   host::Matrix<Index_t> HostAdjMatrix;
   device::Matrix<Cost_t> *Costs = nullptr;

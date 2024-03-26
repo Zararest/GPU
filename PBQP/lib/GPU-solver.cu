@@ -7,32 +7,58 @@ namespace PBQP {
 
 namespace {
 
-__global__
-void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts, unsigned NumOfCombinations) {
-  // This should be stored in local memory
+__device__
+void __fillChoices(device::Graph &Graph, unsigned char *Choices, unsigned GlobalId) {
+  // We assume that task with node size more than 255 is too hard
+  constexpr auto MaxNodeSize = 255;
+  auto NumOfNodes = Graph.getAdjMatrix().h();
   auto &AdjMatrix = Graph.getAdjMatrix();
-  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
-  auto LhsChoicesLeft = GlobalId;
-  auto RhsChoicesLeft = LhsChoicesLeft;
+  for (unsigned NodeIdx = 0; NodeIdx < NumOfNodes; ++NodeIdx) {
+    auto CostIdx = AdjMatrix[NodeIdx][NodeIdx];
+    auto &CostVect = Graph.getCostMatrix(CostIdx);
+    assert(CostVect.w() == 1);
+    assert(CostVect.h() <= MaxNodeSize);
+    Choices[NodeIdx] = GlobalId % CostVect.h();
+    GlobalId /= CostVect.h();
+  }
+}
+
+__device__
+Graph::Cost_t __calcMatrixesCost(device::Graph &Graph, unsigned LhsIdx, 
+                                 unsigned char *Choices) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
   auto NumOfNodes = AdjMatrix.h();
   auto Cost = Graph::Cost_t{0};
-  for (unsigned LhsNodeIdx = 0; LhsNodeIdx < NumOfNodes; ++LhsNodeIdx) {
-    auto LhsCostIdx = AdjMatrix[LhsNodeIdx][LhsNodeIdx];
-    auto &LhsCostVect = Graph.getCostMatrix(LhsCostIdx);
-    assert(LhsCostVect.w() == 1);
-    auto LhsChoice = LhsChoicesLeft % LhsCostVect.h();
-    LhsChoicesLeft /= LhsCostVect.h();
-    Cost += LhsCostVect[LhsChoice][0];
-    RhsChoicesLeft = GlobalId;
-    for (unsigned RhsNodeIdx = 0; RhsNodeIdx < NumOfNodes; ++RhsNodeIdx) {
-      auto AdjCostIdx = AdjMatrix[LhsNodeIdx][RhsNodeIdx];
-      auto RhsCostSize = Graph.getCostMatrix(AdjMatrix[RhsNodeIdx][RhsNodeIdx]).h();
-      if (RhsNodeIdx != LhsNodeIdx && AdjCostIdx >= 0) {
-        auto RhsChoice = RhsChoicesLeft % RhsCostSize;
-        Cost += Graph.getCostMatrix(AdjCostIdx)[LhsChoice][RhsChoice];
-      }
-      RhsChoicesLeft /= RhsCostSize;
+  auto LhsChoice = Choices[LhsIdx];
+  for (unsigned RhsIdx = 0; RhsIdx < NumOfNodes; ++RhsIdx) {
+    if (LhsIdx == RhsIdx)
+      continue;
+    auto AdjCostIdx = AdjMatrix[LhsIdx][RhsIdx];
+    if (AdjCostIdx >= 0) {
+      auto RhsChoice = Choices[RhsIdx];
+      Cost += Graph.getCostMatrix(AdjCostIdx)[LhsChoice][RhsChoice];
     }
+  }
+  return Cost;
+}
+
+__global__
+void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts, unsigned NumOfCombinations) {
+  // We assume that task on more than 32 nodes is unsolvable, 
+  //  because 2^32 at least alot
+  constexpr auto MaxNumberOfNodes = 32u;
+  unsigned char Choices[MaxNumberOfNodes];
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  __fillChoices(Graph, Choices, GlobalId);
+  auto Cost = Graph::Cost_t{0};
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto NumOfNodes = AdjMatrix.h();
+  for (unsigned LhsIdx = 0; LhsIdx < NumOfNodes; ++LhsIdx) {
+    Cost += __calcMatrixesCost(Graph, LhsIdx, Choices);
+    auto LhsVectorCostIdx = AdjMatrix[LhsIdx][LhsIdx];
+    assert(LhsVectorCostIdx >= 0);
+    auto LhsChoice = Choices[LhsIdx];
+    Cost += Graph.getCostMatrix(LhsVectorCostIdx)[LhsChoice][0];
   }
 
   if (GlobalId < NumOfCombinations)
