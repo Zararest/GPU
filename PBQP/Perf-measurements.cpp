@@ -96,10 +96,10 @@ int main(int Argc, char **Argv) {
   if (CLPars.getOption("check-solution") != "")
     CheckSolution = CLPars.getOption("check-solution") == "true";
 
-  if (UseCPU && UseCPU)
+  if (UseCPU && UseGPU)
     utils::reportFatalError("Use only one solver");
   
-  if (UseCPU || UseCPU)
+  if (!UseCPU && !UseGPU)
     utils::reportFatalError("No solver has been specified");
 
   if (UseGPU) {

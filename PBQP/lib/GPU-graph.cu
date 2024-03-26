@@ -40,14 +40,14 @@ Graph::Graph(const PBQP::Graph &HostGraph) {
                                      HostGraph.edgesEnd())) {
     auto [Lhs, Rhs] = Edge->getNodes();
     auto [LhsIdx, RhsIdx] = GetIndexes(Lhs, Rhs);
-    fillAdjMatrix(LhsIdx, RhsIdx, CostMatrices.size());
+    HostAdjMatrix[LhsIdx][RhsIdx] = CostMatrices.size();
     CostMatrices.emplace_back(Edge->getCostMatrix());
   }
 
   for (auto &Node : utils::makeRange(HostGraph.nodesBeg(), 
                                      HostGraph.nodesEnd())) {
     auto [NodeIdx, _] = GetIndexes(Node.get(), Node.get());
-    fillAdjMatrix(NodeIdx, NodeIdx, CostMatrices.size());
+    HostAdjMatrix[NodeIdx][NodeIdx] = CostMatrices.size();
     CostMatrices.emplace_back(Node->getCostVector());
   }
 

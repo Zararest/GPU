@@ -23,11 +23,11 @@ void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts, unsigned NumOfCom
     auto LhsChoice = LhsChoicesLeft % LhsCostVect.h();
     LhsChoicesLeft /= LhsCostVect.h();
     Cost += LhsCostVect[LhsChoice][0];
-    RhsChoicesLeft = LhsChoicesLeft;
-    for (unsigned RhsNodeIdx = LhsNodeIdx + 1; RhsNodeIdx < NumOfNodes; ++RhsNodeIdx) {
+    RhsChoicesLeft = GlobalId;
+    for (unsigned RhsNodeIdx = 0; RhsNodeIdx < NumOfNodes; ++RhsNodeIdx) {
       auto AdjCostIdx = AdjMatrix[LhsNodeIdx][RhsNodeIdx];
       auto RhsCostSize = Graph.getCostMatrix(AdjMatrix[RhsNodeIdx][RhsNodeIdx]).h();
-      if (AdjCostIdx >= 0) {
+      if (RhsNodeIdx != LhsNodeIdx && AdjCostIdx >= 0) {
         auto RhsChoice = RhsChoicesLeft % RhsCostSize;
         Cost += Graph.getCostMatrix(AdjCostIdx)[LhsChoice][RhsChoice];
       }

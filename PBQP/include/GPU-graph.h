@@ -21,12 +21,6 @@ private:
   // This vector stores cuda memory to be free
   std::vector<device::Matrix<Cost_t>> CostMatrices;
 
-  __host__
-  void fillAdjMatrix(size_t I, size_t J, Index_t Val) {
-    HostAdjMatrix[I][J] = Val;
-    HostAdjMatrix[J][I] = Val;
-  }
-
 public:
   __host__
   Graph() = default;

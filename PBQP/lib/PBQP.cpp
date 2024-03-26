@@ -143,7 +143,7 @@ bool Graph::validate() const {
 }
 
 void Graph::print(std::ostream &OS) const {
-  OS << "graph Dump {\n" <<
+  OS << "digraph Dump {\n" <<
         "node[" <<  GraphNodeColour << "]\n";
   for (auto &Node : Nodes) {
     assert(Node);
@@ -155,7 +155,7 @@ void Graph::print(std::ostream &OS) const {
   for (auto &Edge : Edges) {
     assert(Edge);
     auto [Lhs, Rhs] = Edge->getNodes();
-    OS << "\"" << Lhs << "\" -- \"" << Rhs << "\" [label = \"";
+    OS << "\"" << Lhs << "\" -> \"" << Rhs << "\" [label = \"";
     Edge->print(OS);
     OS << "\"]\n"; 
   }
@@ -303,7 +303,7 @@ void Solution::print(std::ostream &OS) const {
   OS << "graph Dump {\n" <<
         "node[" <<  SolutionColour << "]\n";
 
-  OS << "Solution:" << FinalCost << " [" << AnswerNodeColour << "]\n";
+  OS << "\"Solution:" << FinalCost << "\" [" << AnswerNodeColour << "]\n";
 
   auto Beg = InitialGraph->nodesBeg();
   auto End = InitialGraph->nodesEnd();

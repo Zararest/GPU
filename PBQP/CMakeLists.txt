@@ -8,8 +8,8 @@ include_directories(${CUDAToolkit_INCLUDE_DIRS})
 add_subdirectory(lib)
 target_include_directories(PBQP PUBLIC include/)
 
-add_executable(Test main.cpp)
-target_link_libraries(Test PRIVATE PBQP)
+add_executable(Graph-print Graph-printer.cpp)
+target_link_libraries(Graph-print PRIVATE PBQP)
 
 add_executable(Graph-generator Graph-generator.cpp ./lib/Graph-gen.cpp)
 target_link_libraries(Graph-generator PRIVATE PBQP)
