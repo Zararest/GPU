@@ -154,17 +154,66 @@ void GPUSolver::PassManager::addPass(Pass_t Pass, std::string Name) {
   if (Name == "")
     Name = "Pass " + std::to_string(PassPtrToName.size());
   PassPtrToName[Pass.get()] = Name;
-  Passes.emplace_back(std::move(Pass));
+  Stages.emplace_back(std::move(Pass));
+}
+
+void GPUSolver::PassManager::addLoopStart(Condition_t Cond) {
+  LoopHeaderIdxes.push_back(Stages.size());
+  Stages.emplace_back(LoopHeader{std::move(Cond)});
+}
+
+void GPUSolver::PassManager::addLoopEnd() {
+  if (LoopHeaderIdxes.empty())
+    utils::reportFatalError("Loop header hasn't been specified");
+  auto PrevHeader = LoopHeaderIdxes.back();
+  LoopHeaderIdxes.pop_back();
+  auto &HeaderStage = Stages[PrevHeader];
+  assert(std::holds_alternative<LoopHeader>(HeaderStage));
+  std::get<LoopHeader>(HeaderStage).EndIdx = Stages.size();
+  Stages.emplace_back(LoopEnd{PrevHeader});
+}
+
+GPUSolver::Res_t 
+GPUSolver::PassManager::runPass(Pass_t &Pass, Res_t PrevRes, Graph &Graph) {
+  auto Start = std::chrono::steady_clock::now();
+  auto Res = Pass->run(Graph, std::move(PrevRes));
+  auto End = std::chrono::steady_clock::now();
+  PassPtrToDuration[Pass.get()] += utils::to_milliseconds(End - Start);
+  return Res;
+}
+
+size_t GPUSolver::PassManager::getNextIdx(LoopHeader &Header, 
+                                          Res_t &Res, size_t CurIdx) {
+  if (Header.Cond->check(Res))
+    return CurIdx + 1;
+  return Header.EndIdx + 1;
 }
 
 Solution GPUSolver::PassManager::run(Graph Graph) {
+  if (!LoopHeaderIdxes.empty())
+    utils::reportFatalError("Theree is a loop header without end");
   auto Res = Pass::Res_t{};
-  for (auto &Pass : Passes) {
-    auto Start = std::chrono::steady_clock::now();
-    Res = Pass->run(Graph, std::move(Res));
-    auto End = std::chrono::steady_clock::now();
-    PassPtrToDuration[Pass.get()] = utils::to_milliseconds(End - Start);
+  for (size_t CurStageIdx = 0; CurStageIdx < Stages.size();) {
+    auto &CurStage = Stages[CurStageIdx];
+    if (std::holds_alternative<Pass_t>(CurStage)) {
+      Res = runPass(std::get<Pass_t>(CurStage), std::move(Res), Graph);
+      CurStageIdx++;
+      continue;
+    }
+    if (std::holds_alternative<LoopHeader>(CurStage)) {
+      CurStageIdx = getNextIdx(std::get<LoopHeader>(CurStage), Res, CurStageIdx);
+      continue;
+    }
+    if (std::holds_alternative<LoopEnd>(CurStage)) {
+      auto &HeaderIdx = std::get<LoopEnd>(CurStage).HeaderIdx;
+      auto &Header = Stages[HeaderIdx];
+      assert(std::holds_alternative<LoopHeader>(Header)); 
+      // We've jumped to the header
+      CurStageIdx = getNextIdx(std::get<LoopHeader>(Header), Res, HeaderIdx);
+      continue;
+    }
   }
+
   auto *SolutionPtr = dynamic_cast<FinalSolution *>(Res.get());
   if (!SolutionPtr)
     utils::reportFatalError("Invalid final pass");
@@ -175,17 +224,21 @@ Solution GPUSolver::PassManager::run(Graph Graph) {
 GPUSolver::PassManager::Profile_t
 GPUSolver::PassManager::getProfileInfo() const {
   auto Res = std::vector<std::pair<std::string, size_t>>{};
-  std::transform(Passes.begin(), Passes.end(),
+  std::transform(Stages.begin(), Stages.end(),
                  std::back_inserter(Res),
-                 [&](const Pass_t &Pass) {
-                  auto PassPtr = Pass.get();
+                [&](const auto &Stage) {
+                  if (std::holds_alternative<LoopHeader>(Stage))
+                    return std::pair<std::string, size_t>{"Loop header", 0};
+                  if (std::holds_alternative<LoopEnd>(Stage))
+                    return std::pair<std::string, size_t>{"Loop end", 0};
+                  auto PassPtr = std::get<Pass_t>(Stage).get();
                   auto NameIt = PassPtrToName.find(PassPtr);
                   assert(NameIt != PassPtrToName.end());
                   auto DurationIt = PassPtrToDuration.find(PassPtr);
                   assert(DurationIt != PassPtrToDuration.end());
                   return std::pair<std::string, size_t>{NameIt->second, 
                                                         DurationIt->second};
-                 });
+                });
   return Res;
 }
 
