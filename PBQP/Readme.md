@@ -1,5 +1,20 @@
 # PBQP algorithm
 
+## Run tests
+Build
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
+
+Run performance:
+```bash
+./Perf-measure (--use-GPU/--use-CPU) --in-file file-with-graph --out-file file-to-dump --check-solution 
+```
+
+
 ## Reduction pass
 All reductions accepts `GPUResult` class with GPU graph and `Solution` class. 
 They also returns the same class, but with extended solution.

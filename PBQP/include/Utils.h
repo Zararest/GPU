@@ -100,12 +100,10 @@ private:
     if (Beg == End && Type == Type::String)
       utils::reportFatalError("Empty option [" + Name + "]");
     if (Beg == End && Type == Type::Flag)
-      return {Beg, "false"};
+      return {Beg, "true"};
     auto Arg = *Beg;
     if (Type == Type::Flag && (Arg == "false" || Arg == "true"))
       return {++Beg, Arg};
-    if (Type == Type::Flag)
-      return {Beg, "true"};
     if (Type == Type::String)
       return {++Beg, Arg};
     reportFatalError("Unreachable");

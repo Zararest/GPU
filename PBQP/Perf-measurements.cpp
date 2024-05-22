@@ -66,11 +66,17 @@ void checkSolution(const std::string &InFileName) {
                             std::to_string(GPUAns.getFinalCost()) + "]");
 }
 
+void runHeuristic() {
+  auto Solver = PBQP::HeuristicSolver{};
+  Solver.solve(PBQP::Graph{});
+}
+
 int main(int Argc, char **Argv) {
   auto CLPars = utils::CLParser{Argc, Argv};
   CLPars.addOption("in-file", utils::CLOption::Type::String);
   CLPars.addOption("out-file", utils::CLOption::Type::String);
   CLPars.addOption("use-GPU", utils::CLOption::Type::Flag);
+  CLPars.addOption("use-heuristic", utils::CLOption::Type::Flag);
   CLPars.addOption("use-CPU", utils::CLOption::Type::Flag);
   CLPars.addOption("only-time", utils::CLOption::Type::Flag);
   CLPars.addOption("check-solution", utils::CLOption::Type::Flag);
@@ -78,8 +84,9 @@ int main(int Argc, char **Argv) {
   CLPars.parseOptions();
   auto InFileName = std::string{"./graphs/default.out"};
   auto OutFileName = std::string{"solution.dot"};
-  auto UseGPU = false;
-  auto UseCPU = false;
+  auto UseGPU = CLPars.getOption("use-GPU") == "true";
+  auto UseCPU = CLPars.getOption("use-CPU") == "true";
+  auto UseHeuristic = CLPars.getOption("use-heuristic") == "true";
   auto OnlyTime = false;
   auto CheckSolution = false;
 
@@ -87,10 +94,6 @@ int main(int Argc, char **Argv) {
     InFileName = CLPars.getOption("in-file");
   if (CLPars.getOption("out-file") != "")
     OutFileName = CLPars.getOption("out-file");
-  if (CLPars.getOption("use-GPU") != "")
-    UseGPU = CLPars.getOption("use-GPU") == "true";
-  if (CLPars.getOption("use-CPU") != "")
-    UseCPU = CLPars.getOption("use-CPU") == "true";
   if (CLPars.getOption("only-time") != "")
     OnlyTime = CLPars.getOption("only-time") == "true";
   if (CLPars.getOption("check-solution") != "")
@@ -99,7 +102,7 @@ int main(int Argc, char **Argv) {
   if (UseCPU && UseGPU)
     utils::reportFatalError("Use only one solver");
   
-  if (!UseCPU && !UseGPU)
+  if (!UseCPU && !UseGPU && !UseHeuristic)
     utils::reportFatalError("No solver has been specified");
 
   auto OutString = std::string{};
@@ -115,6 +118,10 @@ int main(int Argc, char **Argv) {
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
       OutString = "CPU time: " + std::to_string(Time) + "ms\n";
+  }
+
+  if (UseHeuristic) {
+    runHeuristic();
   }
 
   std::cout << OutString << std::endl;

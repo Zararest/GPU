@@ -146,6 +146,66 @@ struct GraphDeleter final : public GPUSolver::FinalPass {
   }
 };
 
+struct FinalMock final : public GPUSolver::FinalPass {
+  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
+    return Solution{};
+  }
+};
+
+class LoopCondition : public GPUSolver::Pass::Result {
+protected:  
+  bool Condition = false;
+
+public:
+  bool getCondition() const { return Condition; }
+};
+
+struct LoopConditionHandler final : public GPUSolver::Condition {
+  bool check(GPUSolver::Pass::Res_t &PrevResult) override {
+    auto *ResPtr = dynamic_cast<LoopCondition *>(PrevResult.get());
+    if (!ResPtr)
+      utils::reportFatalError("Loop header accepts only LoopCondition class");
+    return ResPtr->getCondition();
+  }
+};
+
+class LoopCounter : public LoopCondition {
+protected:
+  size_t NumOfIterations;
+  size_t CurIteration = 0;
+
+  void checkCondition() {
+    Condition = CurIteration < NumOfIterations;
+  }
+
+public:
+  LoopCounter(size_t NumOfIterations) : NumOfIterations{NumOfIterations} {
+    checkCondition();
+  } 
+
+  void inc() {
+    CurIteration++;
+    checkCondition();
+  }
+};
+
+struct Counter final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    auto *ConterResPtr = dynamic_cast<LoopCounter *>(PrevResult.get());
+    if (!ConterResPtr)
+      utils::reportFatalError("Counter accepts only LoopCounter result");
+    ConterResPtr->inc();
+    return PrevResult;
+  }
+};
+
+struct CounterInit final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    constexpr auto IterNum = 10;
+    return Res_t{new LoopCounter(IterNum)};
+  }
+};
+
 } // anonymous namespace
 
 GPUSolver::Pass::Result::~Result() {}
@@ -251,6 +311,14 @@ void GPUFullSearch::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new GraphLoader});
   PM.addPass(Pass_t{new FullSearchImpl}, "GPU full search");
   PM.addPass(Pass_t{new GraphDeleter});
+}
+
+void HeuristicSolver::addPasses(PassManager &PM) {
+  PM.addPass(Pass_t{new CounterInit});
+  PM.addLoopStart(Condition_t{new LoopConditionHandler});
+    PM.addPass(Pass_t{new Counter});
+  PM.addLoopEnd();
+  PM.addPass(Pass_t{new FinalMock});
 }
 
 } // namespace PBQP

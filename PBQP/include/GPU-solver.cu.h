@@ -33,6 +33,8 @@ struct GPUSolver : public Solver {
   
   // Class to run all transformations
   class PassManager final {
+    // If Condition::check() returns true, then pass in loop is being executed,
+    //   otherwise pass after corresponding LoopEnd is being executed
     struct LoopHeader final {
       Condition_t Cond;
       size_t EndIdx = 0;
@@ -121,6 +123,8 @@ struct GPUFullSearch final : public GPUSolver {
 
 class HeuristicSolver final : public GPUSolver {
 
+  // Pass that performs R0 reduction on graph:
+  //  fins nodes with degree 0 and selects best option
   struct R0Reduction final : public GPUSolver::Pass {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
