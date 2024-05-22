@@ -129,6 +129,7 @@ class HeuristicSolver final : public GPUSolver {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
+  // This is a pass that performs full search on a reduced graph
   struct CleanUpPass final : public GPUSolver::Pass {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };

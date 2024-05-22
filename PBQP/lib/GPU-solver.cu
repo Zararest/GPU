@@ -158,6 +158,7 @@ protected:
 
 public:
   bool getCondition() const { return Condition; }
+  void setCondition(bool NewCond) { Condition = NewCond; }
 };
 
 struct LoopConditionHandler final : public GPUSolver::Condition {
@@ -205,6 +206,11 @@ struct CounterInit final : public GPUSolver::Pass {
     return Res_t{new LoopCounter(IterNum)};
   }
 };
+
+bool performR0Reduction(device::Graph &Graph) {
+  std::cout << "Performing R0\n";
+  return false;
+}
 
 } // anonymous namespace
 
@@ -304,7 +310,7 @@ GPUSolver::PassManager::getProfileInfo() const {
 
 Solution GPUSolver::solve(Graph Task) {
   this->addPasses(PM);
-  return PM.run(std::move(Task));           
+  return PM.run(std::move(Task));
 }
 
 void GPUFullSearch::addPasses(PassManager &PM) {
@@ -313,10 +319,75 @@ void GPUFullSearch::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new GraphDeleter});
 }
 
+// State of loop determines the condition on its end.
+// This class contains metadata for graph processing
+template <typename T>
+struct LoopState : public LoopCondition {
+  using Metadata_t = std::unique_ptr<T>;
+private:
+  Metadata_t Metadata;
+
+public:
+  LoopState(Metadata_t Metadata) : Metadata{std::move(Metadata)} {}
+
+  T &getMetadata() {
+    if (!Metadata)
+      utils::reportFatalError("There is no metadata");
+    return *Metadata;
+  }
+};
+
+class GPUGraphData final {
+  device::Graph Graph;
+  bool GraphChanged = false;
+
+public:
+  GPUGraphData(const PBQP::Graph &HostGraph) : Graph{HostGraph} {}
+
+  device::Graph &getDeviceGraph() { return Graph; }
+  void graphHasBeenChanged(bool IsChanged) { GraphChanged = IsChanged; }
+  bool isGraphChanged() const { return GraphChanged; }
+};
+
+struct InitStatePass final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    auto Metadata = LoopState<GPUGraphData>::Metadata_t{new GPUGraphData(Graph)};
+    auto NewLoopState = new LoopState<GPUGraphData>(std::move(Metadata));
+    NewLoopState->setCondition(/*NewCond*/ true);
+    return Res_t{NewLoopState};
+  }
+};
+
+struct GraphChangeChecker final : public GPUSolver::Pass {
+  Res_t run(const Graph &Graph, Res_t PrevResult) override {
+    auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+    if (!ResPtr)
+      utils::reportFatalError("Invalid loop state");
+    auto &Metadata = ResPtr->getMetadata();
+    ResPtr->setCondition(Metadata.isGraphChanged());
+    return PrevResult;
+  }
+};
+
+GPUSolver::Res_t 
+HeuristicSolver::R0Reduction::run(const Graph &Graph, 
+                                  GPUSolver::Res_t PrevResult) {
+  auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+  if (!ResPtr)
+    utils::reportFatalError("Invalid loop state in R0 reduction");
+  auto &Metadata = ResPtr->getMetadata();
+  bool Changed = performR0Reduction(Metadata.getDeviceGraph()) || 
+                  Metadata.isGraphChanged();
+  ResPtr->setCondition(Changed);
+  return PrevResult;
+}
+
 void HeuristicSolver::addPasses(PassManager &PM) {
-  PM.addPass(Pass_t{new CounterInit});
+  PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
-    PM.addPass(Pass_t{new Counter});
+    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
   PM.addPass(Pass_t{new FinalMock});
 }
