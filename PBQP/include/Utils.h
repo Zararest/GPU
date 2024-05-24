@@ -102,8 +102,11 @@ private:
     if (Beg == End && Type == Type::Flag)
       return {Beg, "true"};
     auto Arg = *Beg;
-    if (Type == Type::Flag && (Arg == "false" || Arg == "true"))
-      return {++Beg, Arg};
+    if (Type == Type::Flag) {
+      if (Arg == "false" || Arg == "true")
+        return {++Beg, Arg};
+      return {Beg, "true"};
+    }
     if (Type == Type::String)
       return {++Beg, Arg};
     reportFatalError("Unreachable");
@@ -115,7 +118,7 @@ public:
 
   // If option has been matched returns iterator and info
   template <typename It>
-  std::pair<It, std::string> match(It Beg, It End) const {
+  std::pair<It, std::string> match(It Beg, It End) const { 
     if (Beg == End)
       return {Beg, ""};
     if (!matchName(*Beg))

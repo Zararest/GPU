@@ -323,4 +323,11 @@ void Solution::print(std::ostream &OS) const {
   }
   OS << "}\n";
 }
+
+void Solution::printSummary(std::ostream &OS) const {
+  OS << "Num of selections: " << SelectedVariants.size() << "\n";
+  OS << "Selections:\n";
+  for (auto [NodeIdx, Selection] : SelectedVariants)
+    OS << "\t" << NodeIdx << " -> " << Selection << "\n";
+}
 } // namespace PBQP 

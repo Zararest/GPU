@@ -146,6 +146,7 @@ public:
     return FinalCost;
   }
   void print(std::ostream &OS) const;
+  void printSummary(std::ostream &OS) const;
 };
 
 struct Solver {

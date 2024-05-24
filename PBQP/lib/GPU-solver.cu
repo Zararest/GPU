@@ -177,12 +177,6 @@ struct GraphDeleter final : public GPUSolver::FinalPass {
   }
 };
 
-struct FinalMock final : public GPUSolver::FinalPass {
-  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
-    return Solution{};
-  }
-};
-
 class LoopCondition : public GPUSolver::Pass::Result {
 protected:  
   bool Condition = false;
@@ -238,19 +232,21 @@ struct CounterInit final : public GPUSolver::Pass {
   }
 };
 
-std::pair<std::vector<char>, bool> getNodesToReduceR0(const Graph &Graph) {
+std::pair<std::vector<char>, size_t> getNodesToReduceR0(const Graph &Graph) {
   auto NodesToReduce = std::vector<char>(Graph.size(), 0);
-  auto HasNodeToReduce = false;
   //TODO: make indexed range
   auto NodeIdx = 0ul;
+  auto NumOfNodesToReduce = 0ul;
   for (auto &Node : utils::makeRange(Graph.nodesBeg(), Graph.nodesEnd())) {
     if (Node->order() == 0) {
       NodesToReduce[NodeIdx] = 1;
-      HasNodeToReduce = true;
+      NumOfNodesToReduce++;
     }
     NodeIdx++;
   }
-  return {NodesToReduce, HasNodeToReduce};
+  DEBUG_EXPR(std::cout << "\tFound " << NumOfNodesToReduce 
+              << " nodes to reduce\n");
+  return {NodesToReduce, NumOfNodesToReduce};
 }
 
 void commitReductionToHost(thrust::host_vector<int> SelectionForNodes, 
@@ -266,17 +262,23 @@ void commitReductionToHost(thrust::host_vector<int> SelectionForNodes,
 
 bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph, 
                         Solution &Sol, unsigned BlockSize) {
-  auto [NodesToReduce, HasNodeToReduce] = getNodesToReduceR0(Graph);
+  DEBUG_EXPR(std::cout << "Performing R0 reduction\n");
+  // This should be a device function, because Graph doesn't match GraphDevice
+  auto [NodesToReduce, NumOfNodesToReduce] = getNodesToReduceR0(Graph);
+  if (NumOfNodesToReduce == 0)
+    return false;
+
   auto NodesToReduceDevice = 
     thrust::device_vector<char>(NodesToReduce.begin(), NodesToReduce.end());
   auto SelectionForNodes = thrust::device_vector<int>(NodesToReduce.size(), -1);
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(Graph.size(), ThrBlockDim.x)};
   __R0Reduction<<<BlockGridDim, ThrBlockDim>>>
-    (GraphDevice, thrust::raw_pointer_cast(NodesToReduce.data()), 
+    (GraphDevice, thrust::raw_pointer_cast(NodesToReduceDevice.data()), 
                   thrust::raw_pointer_cast(SelectionForNodes.data()));
   commitReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
-  return HasNodeToReduce;
+  DEBUG_EXPR(std::cout << "Graph has been reduced: R0\n");
+  return NumOfNodesToReduce != 0;
 }
 
 } // anonymous namespace
@@ -418,6 +420,18 @@ public:
   Solution &getSolution() { return Sol; }
 };
 
+struct FinalMock final : public GPUSolver::FinalPass {
+  Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
+    auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+    if (!ResPtr)
+      utils::reportFatalError("Invalid loop state in R0 reduction");
+    auto &Sol = ResPtr->getMetadata().getSolution();
+    DEBUG_EXPR(std::cout << "Solution:");
+    DEBUG_EXPR(Sol.printSummary(std::cout));
+    return Solution{};
+  }
+};
+
 struct InitStatePass final : public GPUSolver::Pass {
   Res_t run(const Graph &Graph, Res_t PrevResult) override {
     auto Metadata = LoopState<GPUGraphData>::Metadata_t{new GPUGraphData(Graph)};
@@ -458,7 +472,7 @@ void HeuristicSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
     PM.addPass(Pass_t{new R0Reduction});
-    PM.addPass(Pass_t{new R0Reduction});
+    //PM.addPass(Pass_t{new R0Reduction});
     PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
   PM.addPass(Pass_t{new FinalMock});

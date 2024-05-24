@@ -2,6 +2,7 @@
 
 #include <random>
 #include <set>
+#include <cmath>
 
 namespace PBQP {
 
@@ -168,7 +169,7 @@ Graph generateGraph(GenConfig Cfg) {
                  std::back_inserter(CliqueSizes),
                   [](size_t LhsBound, size_t RhsBound) {
                     assert(RhsBound >= LhsBound);
-                    return RhsBound - LhsBound;
+                    return std::max(RhsBound - LhsBound, 1ul);
                   });
 
   auto CliqueIdxes = std::vector<size_t>(CliqueSizes.size());

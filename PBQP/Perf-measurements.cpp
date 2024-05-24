@@ -66,9 +66,14 @@ void checkSolution(const std::string &InFileName) {
                             std::to_string(GPUAns.getFinalCost()) + "]");
 }
 
-void runHeuristic() {
+void runHeuristic(const std::string &InFileName) {
+  auto IS = std::ifstream{InFileName};
+  auto Graph = PBQP::Graph{};
+  Graph.read(IS);
+  assert(Graph.validate());
+
   auto Solver = PBQP::HeuristicSolver{};
-  Solver.solve(PBQP::Graph{});
+  Solver.solve(std::move(Graph));
 }
 
 int main(int Argc, char **Argv) {
@@ -121,7 +126,7 @@ int main(int Argc, char **Argv) {
   }
 
   if (UseHeuristic) {
-    runHeuristic();
+    runHeuristic(InFileName);
   }
 
   std::cout << OutString << std::endl;
