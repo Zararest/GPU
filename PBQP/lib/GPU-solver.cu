@@ -1,6 +1,7 @@
 #include "GPU-solver.cu.h"
 
 #include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 #include <thrust/extrema.h>
 
 namespace PBQP {
@@ -63,6 +64,36 @@ void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts, unsigned NumOfCom
 
   if (GlobalId < NumOfCombinations)
     AllCosts[GlobalId] = Cost;
+}
+
+// Returns number of selection for node 
+//  and removes cost vector of a given node from AdjMatrix
+__device__
+int reduceNodeR0(device::Graph &Graph, unsigned NodeId) {
+  auto CostVectorId = Graph.getAdjMatrix()[NodeId][NodeId];
+  assert(CostVectorId >= 0);
+  auto &CostVector = Graph.getCostMatrix(CostVectorId);
+  auto CostVectorSize = CostVector.h();
+  assert(CostVector.w() == 1);
+  auto Solution = 0;
+  auto MinCost = CostVector[0][0];
+  for (unsigned i = 1; i < CostVectorSize; ++i) {
+    auto NewCost = CostVector[i][0];
+    if (NewCost < MinCost) {
+      Solution = i;
+      MinCost = NewCost;
+    }
+  }
+  Graph.getAdjMatrix()[NodeId][NodeId] = -1;
+  return Solution;
+}
+
+__global__
+void __R0Reduction(device::Graph Graph, char *NodesToReduce, int *SelectionForNodes) {
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  auto NumOfNodes = Graph.getAdjMatrix().w();
+  if (GlobalId < NumOfNodes && NodesToReduce[GlobalId] == 1)
+    SelectionForNodes[GlobalId] = reduceNodeR0(Graph, GlobalId);
 }
 
 // Class for passing device::Graph through PassManager
@@ -207,9 +238,45 @@ struct CounterInit final : public GPUSolver::Pass {
   }
 };
 
-bool performR0Reduction(device::Graph &Graph) {
-  std::cout << "Performing R0\n";
-  return false;
+std::pair<std::vector<char>, bool> getNodesToReduceR0(const Graph &Graph) {
+  auto NodesToReduce = std::vector<char>(Graph.size(), 0);
+  auto HasNodeToReduce = false;
+  //TODO: make indexed range
+  auto NodeIdx = 0ul;
+  for (auto &Node : utils::makeRange(Graph.nodesBeg(), Graph.nodesEnd())) {
+    if (Node->order() == 0) {
+      NodesToReduce[NodeIdx] = 1;
+      HasNodeToReduce = true;
+    }
+    NodeIdx++;
+  }
+  return {NodesToReduce, HasNodeToReduce};
+}
+
+void commitReductionToHost(thrust::host_vector<int> SelectionForNodes, 
+                           device::Graph &GraphDevice, Solution &Sol) {
+  for (size_t NodeIdx = 0; NodeIdx < SelectionForNodes.size(); ++NodeIdx) {
+    auto Selection = SelectionForNodes[NodeIdx];
+    if (Selection >= 0) {
+      Sol.addSelection(NodeIdx, Selection);
+      GraphDevice.makeCostUnreachable(NodeIdx, NodeIdx);
+    }
+  }
+}
+
+bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph, 
+                        Solution &Sol, unsigned BlockSize) {
+  auto [NodesToReduce, HasNodeToReduce] = getNodesToReduceR0(Graph);
+  auto NodesToReduceDevice = 
+    thrust::device_vector<char>(NodesToReduce.begin(), NodesToReduce.end());
+  auto SelectionForNodes = thrust::device_vector<int>(NodesToReduce.size(), -1);
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(Graph.size(), ThrBlockDim.x)};
+  __R0Reduction<<<BlockGridDim, ThrBlockDim>>>
+    (GraphDevice, thrust::raw_pointer_cast(NodesToReduce.data()), 
+                  thrust::raw_pointer_cast(SelectionForNodes.data()));
+  commitReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
+  return HasNodeToReduce;
 }
 
 } // anonymous namespace
@@ -340,6 +407,7 @@ public:
 class GPUGraphData final {
   device::Graph Graph;
   bool GraphChanged = false;
+  Solution Sol;
 
 public:
   GPUGraphData(const PBQP::Graph &HostGraph) : Graph{HostGraph} {}
@@ -347,6 +415,7 @@ public:
   device::Graph &getDeviceGraph() { return Graph; }
   void graphHasBeenChanged(bool IsChanged) { GraphChanged = IsChanged; }
   bool isGraphChanged() const { return GraphChanged; }
+  Solution &getSolution() { return Sol; }
 };
 
 struct InitStatePass final : public GPUSolver::Pass {
@@ -376,7 +445,10 @@ HeuristicSolver::R0Reduction::run(const Graph &Graph,
   if (!ResPtr)
     utils::reportFatalError("Invalid loop state in R0 reduction");
   auto &Metadata = ResPtr->getMetadata();
-  bool Changed = performR0Reduction(Metadata.getDeviceGraph()) || 
+  bool Changed = performR0Reduction(Metadata.getDeviceGraph(), 
+                                    Graph,
+                                    Metadata.getSolution(),
+                                    BlockSize) || 
                   Metadata.isGraphChanged();
   ResPtr->setCondition(Changed);
   return PrevResult;

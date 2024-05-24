@@ -126,10 +126,12 @@ class HeuristicSolver final : public GPUSolver {
   // Pass that performs R0 reduction on graph:
   //  fins nodes with degree 0 and selects best option
   struct R0Reduction final : public GPUSolver::Pass {
+    static constexpr size_t BlockSize = 32;
+    
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
-  // This is a pass that performs full search on a reduced graph
+  // This is a pass that removes nodes that has been reduced
   struct CleanUpPass final : public GPUSolver::Pass {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };

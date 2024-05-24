@@ -4,6 +4,7 @@
 
 namespace device {
 
+// Non-copyable on device
 struct Graph final {
   using Cost_t = float;
   using Index_t = int;
@@ -18,6 +19,9 @@ private:
   device::Matrix<Index_t> AdjMatrix;
   host::Matrix<Index_t> HostAdjMatrix;
   device::Matrix<Cost_t> *Costs = nullptr;
+  // Some cost matricies could be unreachable, 
+  //  since reductions work with AdjMatrix and don't change Costs
+  std::vector<Index_t> UnreachableCosts;
   unsigned NumOfCosts = 0;
 
   // This vector stores cuda memory to be free
@@ -47,6 +51,15 @@ public:
   size_t size() const {
     assert(HostAdjMatrix.h() == HostAdjMatrix.w());
     return HostAdjMatrix.h();
+  }
+
+  __host__
+  void makeCostUnreachable(size_t NodeIdx, size_t NeighbIdx) {
+    assert(NodeIdx < HostAdjMatrix.h());
+    assert(NeighbIdx < HostAdjMatrix.w());
+    auto CostIdx = HostAdjMatrix[NodeIdx][NeighbIdx];
+    HostAdjMatrix[NodeIdx][NeighbIdx] = -1;
+    UnreachableCosts.push_back(CostIdx);
   }
 
   __device__
