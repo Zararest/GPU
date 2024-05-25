@@ -99,8 +99,8 @@ void Graph::updateTranslator() {
        CurDeviceIdx++) {
     auto HostNodeIdx = getHostNode(CurDeviceIdx);
     if (HostNodeIdx) {
-      auto NewIdx = NewTranslator.getmaxDeviceIdx() ? 
-                    *NewTranslator.getmaxDeviceIdx() + 1 :
+      auto NewIdx = NewTranslator.getMaxDeviceIdx() ? 
+                    *NewTranslator.getMaxDeviceIdx() + 1 :
                     0;
       NewTranslator.addNodes(NewIdx, *HostNodeIdx);
     }
@@ -110,8 +110,8 @@ void Graph::updateTranslator() {
 
 __host__
 void Graph::updateHostAdjMatrix() {
-  auto NumOfUnresolvedNodes = Translator.getmaxDeviceIdx() ? 
-                              *Translator.getmaxDeviceIdx() + 1 :
+  auto NumOfUnresolvedNodes = Translator.getMaxDeviceIdx() ? 
+                              *Translator.getMaxDeviceIdx() + 1 :
                               0;
   assert(HostAdjMatrix.h() == HostAdjMatrix.w());
   auto MatrixSize = HostAdjMatrix.h();
@@ -121,8 +121,6 @@ void Graph::updateHostAdjMatrix() {
       for (size_t j = 0; j < MatrixSize; ++j)
         if (nodeIsUnresolved(j))
           NewAdjMatrixValue.push_back(HostAdjMatrix[i][j]);
-  std::cout << "Unresolved elements: " << NewAdjMatrixValue.size() << "\n";
-  std::cout << "from translator: " << NumOfUnresolvedNodes << "\n";
   auto NewAdjMatrix = 
     host::Matrix<Index_t>(NewAdjMatrixValue.begin(),
                           NewAdjMatrixValue.end(),

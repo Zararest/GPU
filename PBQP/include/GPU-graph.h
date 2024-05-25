@@ -14,7 +14,7 @@ struct Graph final {
   //  so idexes of the current device graph should be translated to the host one
   class NodesTranslator final {
     std::unordered_map<size_t, size_t> DeviceNodeToHostNode;
-    std::optional<size_t> MaxDeviceIdx = 0;
+    std::optional<size_t> MaxDeviceIdx = std::nullopt;
   public:
     void clear() {
       DeviceNodeToHostNode.clear();
@@ -30,12 +30,12 @@ struct Graph final {
       DeviceNodeToHostNode[DeviceNode] = HostNode;
     }
 
-    size_t getHostNode(size_t DeviceNode) const {
+    size_t getHostNodeIdx(size_t DeviceNode) const {
       assert(DeviceNodeToHostNode.find(DeviceNode) != DeviceNodeToHostNode.end());
       return DeviceNodeToHostNode.find(DeviceNode)->second;
     }
 
-    std::optional<size_t> getmaxDeviceIdx() const {
+    std::optional<size_t> getMaxDeviceIdx() const {
       return MaxDeviceIdx;
     }
   };
@@ -111,7 +111,7 @@ public:
   __host__
   std::optional<size_t> getHostNode(size_t DeviceIdx) const {
     if (nodeIsUnresolved(DeviceIdx))
-      return Translator.getHostNode(DeviceIdx);
+      return Translator.getHostNodeIdx(DeviceIdx);
     return std::nullopt;
   }
 
