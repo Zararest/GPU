@@ -107,7 +107,7 @@ struct GPUResult final : public GPUSolver::Pass::Result {
   device::Graph Graph;
   Solution Sol;
 
-  GPUResult(device::Graph Graph, Solution Sol = Solution{}) : Graph{Graph},
+  GPUResult(device::Graph Graph, Solution Sol = Solution{}) : Graph{std::move(Graph)},
                                                               Sol{std::move(Sol)} {}
 };
 
@@ -232,13 +232,13 @@ struct CounterInit final : public GPUSolver::Pass {
   }
 };
 
-std::pair<std::vector<char>, size_t> getNodesToReduceR0(const Graph &Graph) {
+std::pair<std::vector<char>, size_t> getNodesToReduceR0(const Graph &Graph, device::Graph &CurGraph) {
   auto NodesToReduce = std::vector<char>(Graph.size(), 0);
   //TODO: make indexed range
   auto NodeIdx = 0ul;
   auto NumOfNodesToReduce = 0ul;
   for (auto &Node : utils::makeRange(Graph.nodesBeg(), Graph.nodesEnd())) {
-    if (Node->order() == 0) {
+    if (CurGraph.getHostNode(NodeIdx) && Node->order() == 0) {
       NodesToReduce[NodeIdx] = 1;
       NumOfNodesToReduce++;
     }
@@ -263,8 +263,7 @@ void commitReductionToHost(thrust::host_vector<int> SelectionForNodes,
 bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph, 
                         Solution &Sol, unsigned BlockSize) {
   DEBUG_EXPR(std::cout << "Performing R0 reduction\n");
-  // This should be a device function, because Graph doesn't match GraphDevice
-  auto [NodesToReduce, NumOfNodesToReduce] = getNodesToReduceR0(Graph);
+  auto [NodesToReduce, NumOfNodesToReduce] = getNodesToReduceR0(Graph, GraphDevice);
   if (NumOfNodesToReduce == 0)
     return false;
 
@@ -468,11 +467,23 @@ HeuristicSolver::R0Reduction::run(const Graph &Graph,
   return PrevResult;
 }
 
+GPUSolver::Res_t 
+HeuristicSolver::CleanUpPass::run(const Graph &Graph, 
+                                  GPUSolver::Res_t PrevResult) {
+  auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+  if (!ResPtr)
+    utils::reportFatalError("Invalid loop state in clean up");
+  auto &Metadata = ResPtr->getMetadata();
+  Metadata.getDeviceGraph().removeUnreachableNodes();
+  return PrevResult;
+}
+
 void HeuristicSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
     PM.addPass(Pass_t{new R0Reduction});
-    //PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new CleanUpPass});
     PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
   PM.addPass(Pass_t{new FinalMock});

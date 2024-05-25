@@ -19,6 +19,9 @@ namespace device {
 
 __host__
 Graph::Graph(const PBQP::Graph &HostGraph) {
+  for (size_t NodeIdx = 0; NodeIdx < HostGraph.size(); NodeIdx++)
+    Translator.addNodes(NodeIdx, NodeIdx);
+
   auto NodeAddrToIdx = std::map<PBQP::Graph::Node*, size_t>{};
   auto Idx = 0ull;
   for (auto &NodePtr : utils::makeRange(HostGraph.nodesBeg(), 
@@ -78,6 +81,62 @@ size_t Graph::getNumOfCostCombinations() const {
   }
   assert(NumOfVariants != 0);
   return NumOfVariants;
+}
+
+__host__
+void Graph::removeUnreachableCosts() {
+  for (auto Unreachable : UnreachableCosts) {
+    CostMatrices[Unreachable].free();
+    CostMatrices[Unreachable] = device::Matrix<Cost_t>{};
+  }
+  UnreachableCosts.clear();
+}
+
+__host__
+void Graph::updateTranslator() {
+  auto NewTranslator = NodesTranslator{};
+  for (size_t CurDeviceIdx = 0; CurDeviceIdx < HostAdjMatrix.w(); 
+       CurDeviceIdx++) {
+    auto HostNodeIdx = getHostNode(CurDeviceIdx);
+    if (HostNodeIdx) {
+      auto NewIdx = NewTranslator.getmaxDeviceIdx() ? 
+                    *NewTranslator.getmaxDeviceIdx() + 1 :
+                    0;
+      NewTranslator.addNodes(NewIdx, *HostNodeIdx);
+    }
+  }
+  Translator = NewTranslator;
+}
+
+__host__
+void Graph::updateHostAdjMatrix() {
+  auto NumOfUnresolvedNodes = Translator.getmaxDeviceIdx() ? 
+                              *Translator.getmaxDeviceIdx() + 1 :
+                              0;
+  assert(HostAdjMatrix.h() == HostAdjMatrix.w());
+  auto MatrixSize = HostAdjMatrix.h();
+  auto NewAdjMatrixValue = std::vector<Index_t>{};
+  for (size_t i = 0; i < MatrixSize; ++i)
+    if (nodeIsUnresolved(i))
+      for (size_t j = 0; j < MatrixSize; ++j)
+        if (nodeIsUnresolved(j))
+          NewAdjMatrixValue.push_back(HostAdjMatrix[i][j]);
+
+  auto NewAdjMatrix = 
+    host::Matrix<Index_t>(NewAdjMatrixValue.begin(),
+                          NewAdjMatrixValue.end(),
+                          NumOfUnresolvedNodes, 
+                          NumOfUnresolvedNodes);
+  HostAdjMatrix = std::move(NewAdjMatrix);
+}
+__host__
+void Graph::removeUnreachableNodes() {
+  removeUnreachableCosts();
+  updateTranslator();
+  updateHostAdjMatrix();
+  
+  AdjMatrix.free();
+  AdjMatrix = device::Matrix<Index_t>{HostAdjMatrix};
 }
 
 } // namespace device

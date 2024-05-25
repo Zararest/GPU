@@ -5,6 +5,17 @@
 #include <fstream>
 #include <iterator>
 
+void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
+    std::cout << "Profile info:\n\t";
+    std::transform(ProfileInfo.begin(), ProfileInfo.end(),
+                   std::ostream_iterator<std::string>(std::cout, "\n\t"),
+                   [](auto &Profile) {
+                     return Profile.first + ": " + 
+                            std::to_string(Profile.second);
+                   });
+    std::cout << std::endl;
+}
+
 size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
                   bool OnlyTime) {
   auto IS = std::ifstream{InFileName};
@@ -17,17 +28,10 @@ size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   auto Solution = Solver.solve(std::move(Graph));
   auto End = std::chrono::steady_clock::now();
 
-  if (!OnlyTime) {
-    auto ProfileInfo = Solver.getProfileInfo();
-    std::cout << "Profile info:\n\t";
-    std::transform(ProfileInfo.begin(), ProfileInfo.end(),
-                   std::ostream_iterator<std::string>(std::cout, "\n\t"),
-                   [](auto &Profile) {
-                     return Profile.first + ": " + 
-                            std::to_string(Profile.second);
-                   });
-    std::cout << std::endl;
-  }
+  auto ProfileInfo = Solver.getProfileInfo();
+  if (!OnlyTime)
+    printProfileInfo(ProfileInfo);
+  
   auto SolutionOS = std::ofstream{"GPU-" + AnsFileName};
   Solution.print(SolutionOS);
   return utils::to_milliseconds(End - Start);
@@ -74,6 +78,9 @@ void runHeuristic(const std::string &InFileName) {
 
   auto Solver = PBQP::HeuristicSolver{};
   Solver.solve(std::move(Graph));
+
+  auto ProfileInfo = Solver.getProfileInfo();
+  printProfileInfo(ProfileInfo);
 }
 
 int main(int Argc, char **Argv) {
