@@ -121,7 +121,8 @@ void Graph::updateHostAdjMatrix() {
       for (size_t j = 0; j < MatrixSize; ++j)
         if (nodeIsUnresolved(j))
           NewAdjMatrixValue.push_back(HostAdjMatrix[i][j]);
-
+  std::cout << "Unresolved elements: " << NewAdjMatrixValue.size() << "\n";
+  std::cout << "from translator: " << NumOfUnresolvedNodes << "\n";
   auto NewAdjMatrix = 
     host::Matrix<Index_t>(NewAdjMatrixValue.begin(),
                           NewAdjMatrixValue.end(),
