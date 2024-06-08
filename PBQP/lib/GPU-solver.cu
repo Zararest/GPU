@@ -3,6 +3,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/extrema.h>
+#include <thrust/reduce.h>
 
 namespace PBQP {
 
@@ -232,21 +233,38 @@ struct CounterInit final : public GPUSolver::Pass {
   }
 };
 
-std::pair<std::vector<char>, size_t> getNodesToReduceR0(const Graph &Graph, device::Graph &CurGraph) {
-  auto NodesToReduce = std::vector<char>(Graph.size(), 0);
-  //TODO: make indexed range
-  auto NodeIdx = 0ul;
-  auto NumOfNodesToReduce = 0ul;
-  for (auto &Node : utils::makeRange(Graph.nodesBeg(), Graph.nodesEnd())) {
-    if (CurGraph.getHostNode(NodeIdx) && Node->order() == 0) {
-      NodesToReduce[NodeIdx] = 1;
-      NumOfNodesToReduce++;
-    }
-    NodeIdx++;
+__global__
+void __getNodesToReduceR0(device::Graph Graph, char *NodesToReduce) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto GraphSize = AdjMatrix.h();
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // returns if cur thread is out of matrix or cur node is reduced
+  if (GlobalId >= GraphSize || AdjMatrix[GlobalId][GlobalId] == -1)
+    return;
+
+  auto NumOfNeighb = 0u; 
+  for (unsigned i = 0; i < GraphSize; ++i) {
+    NumOfNeighb += AdjMatrix[i][GlobalId] != -1;
+    NumOfNeighb += AdjMatrix[GlobalId][i] != -1;
   }
-  DEBUG_EXPR(std::cout << "\tFound " << NumOfNodesToReduce 
-              << " nodes to reduce\n");
-  return {NodesToReduce, NumOfNodesToReduce};
+  // every node has at least 2 "neighbors" because we count itself twice
+  NodesToReduce[GlobalId] = NumOfNeighb > 2u;
+}
+
+// returns vector with 0 and 1 with the size of the initial graph
+std::pair<thrust::device_vector<char>, size_t> 
+getNodesToReduceR0(device::Graph &CurGraph, unsigned BlockSize) {
+  auto NumOfNodes = CurGraph.size();
+  auto NodesToReduceDevice = 
+    thrust::device_vector<char>(NumOfNodes);
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(NumOfNodes, ThrBlockDim.x)};
+  __getNodesToReduceR0<<<BlockGridDim, ThrBlockDim>>>(CurGraph, 
+    thrust::raw_pointer_cast(NodesToReduceDevice.data()));
+  auto NumOfNodesToReduce = thrust::reduce(NodesToReduceDevice.begin(),
+                                           NodesToReduceDevice.end());
+  return {NodesToReduceDevice, NumOfNodesToReduce};
 }
 
 void commitReductionToHost(thrust::host_vector<int> SelectionForNodes, 
@@ -254,7 +272,9 @@ void commitReductionToHost(thrust::host_vector<int> SelectionForNodes,
   for (size_t NodeIdx = 0; NodeIdx < SelectionForNodes.size(); ++NodeIdx) {
     auto Selection = SelectionForNodes[NodeIdx];
     if (Selection >= 0) {
-      Sol.addSelection(NodeIdx, Selection);
+      auto HostIdx = GraphDevice.getHostNode(NodeIdx);
+      assert(HostIdx && "Node already has been resolved");
+      Sol.addSelection(*HostIdx, Selection);
       GraphDevice.makeCostUnreachable(NodeIdx, NodeIdx);
     }
   }
@@ -263,13 +283,13 @@ void commitReductionToHost(thrust::host_vector<int> SelectionForNodes,
 bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph, 
                         Solution &Sol, unsigned BlockSize) {
   DEBUG_EXPR(std::cout << "Performing R0 reduction\n");
-  auto [NodesToReduce, NumOfNodesToReduce] = getNodesToReduceR0(Graph, GraphDevice);
+  auto [NodesToReduceDevice, NumOfNodesToReduce] = 
+    getNodesToReduceR0(GraphDevice, BlockSize);
   if (NumOfNodesToReduce == 0)
     return false;
 
-  auto NodesToReduceDevice = 
-    thrust::device_vector<char>(NodesToReduce.begin(), NodesToReduce.end());
-  auto SelectionForNodes = thrust::device_vector<int>(NodesToReduce.size(), -1);
+  auto SelectionForNodes = 
+    thrust::device_vector<int>(NodesToReduceDevice.size(), -1);
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(Graph.size(), ThrBlockDim.x)};
   __R0Reduction<<<BlockGridDim, ThrBlockDim>>>
