@@ -109,6 +109,10 @@ public:
   auto edgesBeg() const { return Edges.begin(); }
   auto edgesEnd() const { return Edges.end(); }
 
+  size_t getNodesCostSize(size_t NodeIdx) const {
+    return Nodes[NodeIdx]->costSize();
+  }
+
   bool validate() const;
   //print graphviz
   void print(std::ostream &OS) const;
