@@ -291,9 +291,34 @@ const Graph &Solution::getGraph() const {
   return *InitialGraph; 
 }
 
+void Solution::resolveBoundedSolutions() {
+  auto Changed = true;
+  while (Changed) {
+    auto NewSolutons = std::unordered_map<size_t, size_t>{};
+    for (auto &BoundedSol : BoundedSolutions) {
+      auto DefiningNode = BoundedSol.getDefiningNode();
+      if (SelectedVariants.find(DefiningNode) == SelectedVariants.end())
+        continue;
+      auto [NewResolvedNode, NewNodeSol] = 
+        BoundedSol.getDependentSolution(SelectedVariants[DefiningNode]);
+      NewSolutons.emplace(NewResolvedNode, NewNodeSol);
+    }
+    Changed = !NewSolutons.empty();
+    for (auto [NewResolvedNode, NewNodeSol] : NewSolutons) {
+      if (!addSelection(NewResolvedNode, NewNodeSol))
+        utils::reportFatalError("Solution already has been added");
+      BoundedSolutions.erase(BoundedSolution{NewResolvedNode, NewNodeSol});
+    }
+  }
+
+  if (!BoundedSolutions.empty())
+    utils::reportFatalError("There are unresolved noeds");
+}
+
 void Solution::makeFinal(Graph InitialGraphIn) {
   if (isFinal())
     utils::reportFatalError("Solution is already final");
+  resolveBoundedSolutions();  
   InitialGraph = std::move(InitialGraphIn);
 }
 

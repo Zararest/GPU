@@ -10,6 +10,7 @@
 #include <utility>
 #include <map>
 #include <optional>
+#include <unordered_set>
 
 namespace PBQP {
 
@@ -118,15 +119,57 @@ public:
 };
 
 class Solution final {
+  class BoundedSolution final {
+    size_t DependentNode;
+    size_t DefiningNode;
+
+    std::vector<size_t> DefiningSelectionsToDependent;
+
+  public:
+    template <typename It>
+    BoundedSolution(size_t DependentNode, size_t DefiningNode, 
+                    It Beg, It End) : DependentNode{DependentNode},
+                                      DefiningNode{DefiningNode},
+                                      DefiningSelectionsToDependent(Beg, End) {}
+    
+    BoundedSolution(size_t DependentNode, size_t DefiningNode) : 
+                                      DependentNode{DependentNode},
+                                      DefiningNode{DefiningNode} {}
+
+    size_t getDefiningNode() const {
+      return DefiningNode;
+    }
+
+    // returns {NodeIdx, Selection}
+    std::pair<size_t, size_t> getDependentSolution(size_t DefiningSelection) const {
+      if (DefiningSelection >= DefiningSelectionsToDependent.size())
+        utils::reportFatalError("Invalid defining selection");
+      return {DependentNode, DefiningSelectionsToDependent[DefiningSelection]};
+    }
+
+    bool operator ==(const BoundedSolution &Sol) const {
+      return DependentNode == Sol.DependentNode;
+    }
+
+    struct Hash final {
+      size_t operator()(const BoundedSolution &Sol) const {
+        return Sol.DependentNode;
+      }
+    };
+  };  
+
   // intermediate solution might have no graph in it
   std::optional<Graph> InitialGraph;
   //node's index to choise
   std::map<size_t, size_t> SelectedVariants;
+  std::unordered_set<BoundedSolution, BoundedSolution::Hash> BoundedSolutions;
   Graph::Cost_t FinalCost = 0;
   static constexpr std::string_view AnswerNodeColour =
     "color=coral, fontsize=18, style=filled, shape=oval";
   static constexpr std::string_view SolutionColour = 
     "color=red, fontsize=14, style=filled, shape=oval";
+
+  void resolveBoundedSolutions();
 
 public:
   Solution() = default;
@@ -136,6 +179,13 @@ public:
   void makeFinal(Graph InitialGraphIn);
   const Graph &getGraph() const;
   void clear() { SelectedVariants.clear(); }
+  bool addBoundedSolution(size_t DependentNode, size_t DefiningNode, 
+                          std::vector<size_t> DefiningSelectionsToDependent) {
+    auto NewSol = BoundedSolution(DependentNode, DefiningNode,
+                                  DefiningSelectionsToDependent.begin(),
+                                  DefiningSelectionsToDependent.end());
+    return BoundedSolutions.insert(std::move(NewSol)).second;
+  }
   bool addSelection(size_t NodeIdx, size_t Select) {
     return SelectedVariants.insert({NodeIdx, Select}).second;
   }
