@@ -4,6 +4,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/extrema.h>
 #include <thrust/reduce.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/count.h>
 
 namespace PBQP {
 
@@ -239,8 +242,7 @@ void __getNodesToReduceR0(device::Graph Graph, char *NodesToReduce) {
   auto GraphSize = AdjMatrix.h();
   auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
 
-  // returns if cur thread is out of matrix or cur node is reduced
-  if (GlobalId >= GraphSize || AdjMatrix[GlobalId][GlobalId] == -1)
+  if (GlobalId >= GraphSize)
     return;
 
   auto NumOfNeighb = 0u; 
@@ -298,6 +300,198 @@ bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
   commitReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
   DEBUG_EXPR(std::cout << "Graph has been reduced: R0\n");
   return NumOfNodesToReduce != 0;
+}
+
+class NodesToReduceR1 {
+  int NodeWithSingleNeighb = -1;
+  int Heighbour = -1;
+  utils::Pair<int, int> MatrixPos{-1, -1};
+
+public:
+  __host__ __device__
+  void addSingleNode(int NewNode) {
+    NodeWithSingleNeighb = NewNode;
+  }
+
+  __host__ __device__
+  unsigned getSingleNode() const {
+    assert(NodeWithSingleNeighb >= 0);
+    return static_cast<unsigned>(NodeWithSingleNeighb);
+  }
+
+  __host__ __device__
+  void addNeighbour(int NewNode) {
+    Heighbour = NewNode;
+  }
+
+  __host__ __device__
+  unsigned getNeighbour() const {
+    assert(Heighbour >= 0);
+    return static_cast<unsigned>(Heighbour);
+  }
+
+  __host__ __device__
+  void addAdjMatrixPos(unsigned X, unsigned Y) {
+    MatrixPos.First = X;
+    MatrixPos.Second = Y;
+  }
+
+  __host__ __device__
+  bool canBeReduced() const {
+    return NodeWithSingleNeighb != -1 && Heighbour != -1;
+  }
+
+  __host__ __device__
+  utils::Pair<unsigned, unsigned> getPosOfAdjMatix() const {
+    assert(MatrixPos.First != -1 && MatrixPos.Second != -1);
+    return utils::Pair<unsigned, unsigned>{
+        static_cast<unsigned>(MatrixPos.First),
+        static_cast<unsigned>(MatrixPos.Second)};
+  }
+
+  // There are 2 variants of nodes:
+  //  1) Single -> Neighb -> ...
+  //                  |
+  //                  V 
+  //                 ...
+  //  2) Single <- Neighb -> ...
+  //                  |
+  //                  V 
+  //                 ...
+  // In order to make abstraction over these 2 cases,
+  //  this class translates selcetions in terms of Single/Neighb 
+  //  into real matrix pos.
+  template <typename T>
+  __device__
+  auto getCostFromAdjMatrix(device::Matrix<T> &CostMatrix, 
+                            unsigned SingleNodeSelection,
+                            unsigned NeighbourSelection) {
+    if (NodeWithSingleNeighb == MatrixPos.First)
+      return CostMatrix[SingleNodeSelection][NeighbourSelection];
+    return  CostMatrix[NeighbourSelection][SingleNodeSelection];
+  }
+};
+
+
+// R1 reduction:
+//   Single -> Neighb -> ...
+//               |
+//               V 
+//              ...
+//  Transforms to:
+//            NewNeighb -> ...
+//               |
+//               V 
+//              ...
+__device__
+void __performR1Reduction(device::Graph &Graph, NodesToReduceR1 Nodes,
+                          unsigned ThreadIdInReduction,
+                          unsigned ThreadsPerReduction) {
+  auto Single = Nodes.getSingleNode();
+  auto Neighb = Nodes.getNeighbour();
+  //FIXME!!!!! 
+}
+
+// Each R1 reduction performs with ThreadsPerReduction threads
+__global__
+void __R1Reduction(device::Graph Graph, NodesToReduceR1 *NodesToReduce, 
+                   unsigned NumberOfReductions,
+                   unsigned ThreadsPerReduction) {
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  auto ReductionId = GlobalId / ThreadsPerReduction;
+  auto ThreadIdInReduction = GlobalId % ThreadsPerReduction;
+
+  if (ReductionId < NumberOfReductions)
+    __performR1Reduction(Graph, NodesToReduce[ReductionId], 
+                         ThreadIdInReduction,
+                         ThreadsPerReduction);
+}
+
+__global__
+void __getNodesToReduceR1(device::Graph Graph, NodesToReduceR1 *NodesToReduce) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto GraphSize = AdjMatrix.h();
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if (GlobalId >= GraphSize)
+    return;
+
+  auto CurNodesToReduce = NodesToReduceR1{};
+  auto NumOfNeighbours = 0u;
+  for (unsigned i = 0; i < GraphSize; ++i) {
+    if (i == GlobalId)
+      continue;
+    bool HasOutEdge = AdjMatrix[GlobalId][i];   
+    bool HasInEdge = AdjMatrix[i][GlobalId];
+    NumOfNeighbours += HasInEdge; 
+    NumOfNeighbours += HasOutEdge;
+    if (HasOutEdge) {
+      CurNodesToReduce.addNeighbour(i);
+      CurNodesToReduce.addAdjMatrixPos(GlobalId, i);
+    }
+    if (HasInEdge) {
+      CurNodesToReduce.addNeighbour(i);
+      CurNodesToReduce.addAdjMatrixPos(i, GlobalId);
+    }
+  }
+
+  if (NumOfNeighbours != 1) {
+    NodesToReduce[GlobalId] = NodesToReduceR1{};
+    return;
+  }
+  CurNodesToReduce.addSingleNode(GlobalId);
+  NodesToReduce[GlobalId] = CurNodesToReduce;
+}
+
+struct HasR1Reduction {
+  __device__
+  bool operator()(const NodesToReduceR1 &Nodes) {
+    return Nodes.canBeReduced();
+  }
+};
+
+thrust::device_vector<NodesToReduceR1> 
+getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
+  auto NumOfNodes = CurGraph.size();
+  auto NodesToReduceDevice = 
+    thrust::device_vector<NodesToReduceR1>(NumOfNodes);
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(NumOfNodes, ThrBlockDim.x)};
+  __getNodesToReduceR1<<<BlockGridDim, ThrBlockDim>>>(CurGraph, 
+    thrust::raw_pointer_cast(NodesToReduceDevice.data()));
+
+  auto NumOfReductions = thrust::count_if(thrust::device, 
+                                          NodesToReduceDevice.begin(),
+                                          NodesToReduceDevice.end(),
+                                          HasR1Reduction());
+  if (NumOfReductions == 0)
+    return thrust::device_vector<NodesToReduceR1>{};
+  
+  auto OnlyNodesToReduce = thrust::device_vector<NodesToReduceR1>(NumOfReductions);
+  thrust::copy_if(thrust::device, 
+                  NodesToReduceDevice.begin(),
+                  NodesToReduceDevice.end(),
+                  OnlyNodesToReduce.begin(),
+                  HasR1Reduction());
+  return OnlyNodesToReduce;
+}
+
+bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph, 
+                        Solution &Sol, unsigned BlockSize, 
+                        unsigned ThreadsPerReduction) {
+  auto OnlyNodesToReduce = getNodesToReduceR1(GraphDevice, BlockSize);
+  DEBUG_EXPR(std::cout << "Found " << OnlyNodesToReduce.size() << " nodes for R1\n");
+  if (OnlyNodesToReduce.size() == 0)
+    return false;
+
+  auto NumOfThreads = OnlyNodesToReduce.size() * ThreadsPerReduction;
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(NumOfThreads, ThrBlockDim.x)};
+  __R1Reduction<<<BlockGridDim, ThrBlockDim>>>
+    (GraphDevice, thrust::raw_pointer_cast(OnlyNodesToReduce.data()),
+     OnlyNodesToReduce.size(),
+     ThreadsPerReduction);
+  return false;
 }
 
 } // anonymous namespace
@@ -488,6 +682,23 @@ HeuristicSolver::R0Reduction::run(const Graph &Graph,
 }
 
 GPUSolver::Res_t 
+HeuristicSolver::R1Reduction::run(const Graph &Graph, 
+                                  GPUSolver::Res_t PrevResult) {
+  auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+  if (!ResPtr)
+    utils::reportFatalError("Invalid loop state in R0 reduction");
+  auto &Metadata = ResPtr->getMetadata();
+  bool Changed = performR1Reduction(Metadata.getDeviceGraph(), 
+                                    Graph,
+                                    Metadata.getSolution(),
+                                    BlockSize,
+                                    ThreadsPerReduction) || 
+                  Metadata.isGraphChanged();
+  ResPtr->setCondition(Changed);
+  return PrevResult;
+}
+
+GPUSolver::Res_t 
 HeuristicSolver::CleanUpPass::run(const Graph &Graph, 
                                   GPUSolver::Res_t PrevResult) {
   auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
@@ -502,7 +713,7 @@ void HeuristicSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
     PM.addPass(Pass_t{new R0Reduction});
-    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new CleanUpPass});
     PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();

@@ -124,9 +124,19 @@ struct GPUFullSearch final : public GPUSolver {
 class HeuristicSolver final : public GPUSolver {
 
   // Pass that performs R0 reduction on graph:
-  //  fins nodes with degree 0 and selects best option
+  //  finds nodes with degree 0 and selects best option
   struct R0Reduction final : public GPUSolver::Pass {
     static constexpr size_t BlockSize = 32;
+    
+    Res_t run(const Graph &Graph, Res_t PrevResult) override;
+  };
+
+  // Pass that performs R0 reduction on graph:
+  //  finds a node that has only one neighbor 
+  //  and moves all costs to the neighbor
+  struct R1Reduction final : public GPUSolver::Pass {
+    static constexpr size_t BlockSize = 32;
+    static constexpr size_t ThreadsPerReduction = 8;
     
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
