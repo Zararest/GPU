@@ -454,10 +454,18 @@ struct HasR1Reduction {
 };
 
 class DependentSolutionsForDevice final {
+  struct DeviceDependentSolution final {
+    // This is an selections to be taken on Dependent node 
+    //  based on selections of Defining node.
+    thrust::device_vector<unsigned> DependentSelections;
+    size_t DefiningHostIdx;
+    size_t DependentHostIdx;
+  };
+
   // defining selection to dependent one
-  using DeviceSelections = thrust::device_vector<unsigned>;
-  std::vector<DeviceSelections> SelectionsOnDevice;
+  std::vector<DeviceDependentSolution> Solutions;
   thrust::device_vector<unsigned *> DeviceArrayOfReductions;
+  //std::unordered_map<>  
 
 public:
   DependentSolutionsForDevice(device::Graph &GraphDevice, const Graph &Graph,
@@ -465,15 +473,20 @@ public:
     for (auto &NodesToReduce : AllNodesToReduce) {
       auto DefiningNodeDeviceIdx = NodesToReduce.getNeighbour();
       auto DefiningNodeHostIdx = GraphDevice.getHostNode(DefiningNodeDeviceIdx);
-      if (!DefiningNodeHostIdx)
+      auto DependentHostIdx = GraphDevice.getHostNode(NodesToReduce.getSingleNode());
+      if (!DefiningNodeHostIdx || !DependentHostIdx)
         utils::reportFatalError("Node has already been reduced");
       auto DefiningSolutionsSize = Graph.getNodesCostSize(*DefiningNodeHostIdx);
-      SelectionsOnDevice.emplace_back(DefiningSolutionsSize);
+      auto NewSolution = 
+        DeviceDependentSolution{thrust::device_vector<unsigned>(DefiningSolutionsSize), 
+                                *DefiningNodeHostIdx,
+                                *DependentHostIdx};
+      Solutions.emplace_back(std::move(NewSolution));
     }
     auto PointersToSolutions = thrust::host_vector<unsigned *>{};
-    for (auto &DeviceSelectionVector : SelectionsOnDevice)
+    for (auto &DeviceSelectionVector : Solutions)
       PointersToSolutions.push_back(
-        thrust::raw_pointer_cast(DeviceSelectionVector.data()));
+        thrust::raw_pointer_cast(DeviceSelectionVector.DependentSelections.data()));
     DeviceArrayOfReductions = std::move(PointersToSolutions);
   }
 
@@ -482,7 +495,14 @@ public:
   }
 
   void addBounedSelections(Solution &Sol) {
-    //FIXME!!!!
+    for (auto &DependentSolution : Solutions) {
+      auto DefiningSelectionsToDependent = 
+        thrust::host_vector<unsigned>{DependentSolution.DependentSelections};
+      Sol.addBoundedSolution(DependentSolution.DependentHostIdx,
+                             DependentSolution.DefiningHostIdx,
+                             {DefiningSelectionsToDependent.begin(),
+                              DefiningSelectionsToDependent.end()});
+    }
   }
 };
 
