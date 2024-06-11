@@ -11,7 +11,7 @@ class CPUFullSearch final : public Solver {
   std::unique_ptr<Solution> OptimalSolution;
   std::unordered_map<Graph::Node *, size_t> NodePtrToIdx;
 
-  void updateSolution(const std::vector<size_t> &Selections, 
+  void updateSolution(const std::vector<size_t> &Selections,
                       Graph::Cost_t CurCost) {
     MinCost = CurCost;
     OptimalSolution->clear();
@@ -24,9 +24,9 @@ class CPUFullSearch final : public Solver {
     auto CurCost = Graph::Cost_t{0};
     for (auto &Edge : utils::makeRange(Graph.edgesBeg(), Graph.edgesEnd())) {
       auto [LhsAddr, RhsAddr] = Edge->getNodes();
-      assert(NodePtrToIdx.find(LhsAddr) != NodePtrToIdx.end() && 
+      assert(NodePtrToIdx.find(LhsAddr) != NodePtrToIdx.end() &&
              NodePtrToIdx[LhsAddr] < Selections.size());
-      assert(NodePtrToIdx.find(RhsAddr) != NodePtrToIdx.end() && 
+      assert(NodePtrToIdx.find(RhsAddr) != NodePtrToIdx.end() &&
              NodePtrToIdx[RhsAddr] < Selections.size());
       auto LhsSelecton = Selections[NodePtrToIdx[LhsAddr]];
       auto RhsSelecton = Selections[NodePtrToIdx[RhsAddr]];
@@ -51,7 +51,7 @@ class CPUFullSearch final : public Solver {
       checkSolution(Selections);
       return;
     }
-    
+
     auto CurNodeIt = OptimalSolution->getGraph().nodesBeg();
     std::advance(CurNodeIt, CurNodeIdx);
     auto &CurNodeCost = (*CurNodeIt)->getCostVector();
@@ -63,14 +63,15 @@ class CPUFullSearch final : public Solver {
     Selections.pop_back();
   }
 
-  static std::unordered_map<Graph::Node *, size_t> createNodesCache(Graph &Task) {
+  static std::unordered_map<Graph::Node *, size_t>
+  createNodesCache(Graph &Task) {
     auto NodesBeg = Task.nodesBeg();
     auto NodesEnd = Task.nodesEnd();
     auto NodePtrToIdx = std::unordered_map<Graph::Node *, size_t>{};
     for (size_t i = 0; NodesBeg != NodesEnd; ++NodesBeg, ++i)
       NodePtrToIdx[NodesBeg->get()] = i;
     return NodePtrToIdx;
-  } 
+  }
 
 public:
   Solution solve(Graph Task) override {
@@ -84,4 +85,4 @@ public:
   }
 };
 
-} // namespace PBQP 
+} // namespace PBQP

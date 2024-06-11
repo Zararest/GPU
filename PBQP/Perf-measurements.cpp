@@ -1,19 +1,18 @@
-#include "PBQP.h"
 #include "CPU-solver.h"
 #include "GPU-solver.cu.h"
+#include "PBQP.h"
 
 #include <fstream>
 #include <iterator>
 
 void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
-    std::cout << "Profile info:\n\t";
-    std::transform(ProfileInfo.begin(), ProfileInfo.end(),
-                   std::ostream_iterator<std::string>(std::cout, "\n\t"),
-                   [](auto &Profile) {
-                     return Profile.first + ": " + 
-                            std::to_string(Profile.second);
-                   });
-    std::cout << std::endl;
+  std::cout << "Profile info:\n\t";
+  std::transform(ProfileInfo.begin(), ProfileInfo.end(),
+                 std::ostream_iterator<std::string>(std::cout, "\n\t"),
+                 [](auto &Profile) {
+                   return Profile.first + ": " + std::to_string(Profile.second);
+                 });
+  std::cout << std::endl;
 }
 
 size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
@@ -31,13 +30,14 @@ size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   auto ProfileInfo = Solver.getProfileInfo();
   if (!OnlyTime)
     printProfileInfo(ProfileInfo);
-  
+
   auto SolutionOS = std::ofstream{"GPU-" + AnsFileName};
   Solution.print(SolutionOS);
   return utils::to_milliseconds(End - Start);
 }
 
-size_t measureCPU(const std::string &InFileName, const std::string &AnsFileName) {
+size_t measureCPU(const std::string &InFileName,
+                  const std::string &AnsFileName) {
   auto IS = std::ifstream{InFileName};
   auto Graph = PBQP::Graph{};
   Graph.read(IS);
@@ -65,7 +65,7 @@ void checkSolution(const std::string &InFileName) {
   auto GPUAns = GPUSolver.solve(PBQP::Graph::copy(Graph));
 
   if (!utils::isEqual(CPUAns.getFinalCost(), GPUAns.getFinalCost()))
-    utils::reportFatalError("Differen answers: CPU[" + 
+    utils::reportFatalError("Differen answers: CPU[" +
                             std::to_string(CPUAns.getFinalCost()) + "] GPU[" +
                             std::to_string(GPUAns.getFinalCost()) + "]");
 }
@@ -113,7 +113,7 @@ int main(int Argc, char **Argv) {
 
   if (UseCPU && UseGPU)
     utils::reportFatalError("Use only one solver");
-  
+
   if (!UseCPU && !UseGPU && !UseHeuristic)
     utils::reportFatalError("No solver has been specified");
 

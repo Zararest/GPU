@@ -4,16 +4,15 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include <vector>
-#include <chrono>
 #include <iostream>
+#include <vector>
 
 namespace host {
 
-template <typename T>
-class Matrix {
+template <typename T> class Matrix {
   using It = typename std::vector<T>::iterator;
   using ConstIt = typename std::vector<T>::const_iterator;
 
@@ -27,12 +26,10 @@ class Matrix {
     size_t RowNum = 0;
 
   public:
-    __host__
-    Proxy(size_t RowNum, size_t Width, std::vector<T> &Elems) 
+    __host__ Proxy(size_t RowNum, size_t Width, std::vector<T> &Elems)
         : Elems{Elems}, Width{Width}, RowNum{RowNum} {}
 
-    __host__
-    T &operator [](size_t Col) {
+    __host__ T &operator[](size_t Col) {
       DEBUG_EXPR(assert(Col < Width));
       return Elems[RowNum * Width + Col];
     }
@@ -44,12 +41,11 @@ class Matrix {
     size_t RowNum = 0;
 
   public:
-    __host__
-    ConstProxy(size_t RowNum, size_t Width, const std::vector<T> &Elems) 
+    __host__ ConstProxy(size_t RowNum, size_t Width,
+                        const std::vector<T> &Elems)
         : Elems{Elems}, Width{Width}, RowNum{RowNum} {}
 
-    __host__
-    const T &operator [](size_t Col) const {
+    __host__ const T &operator[](size_t Col) const {
       DEBUG_EXPR(assert(Col < Width));
       return Elems[RowNum * Width + Col];
     }
@@ -58,81 +54,51 @@ class Matrix {
 public:
   using value_type = T;
 
-  __host__
-  Matrix(size_t Height = 0, size_t Width = 0)
+  __host__ Matrix(size_t Height = 0, size_t Width = 0)
       : Width{Width}, Height{Height}, Elements(Height * Width) {}
 
   template <typename It>
-  __host__
-  Matrix(It Beg, It End, size_t Height, size_t Width) 
+  __host__ Matrix(It Beg, It End, size_t Height, size_t Width)
       : Width{Width}, Height{Height}, Elements{Beg, End} {
     assert(Width * Height == Elements.size());
   }
 
-  __host__
-  Proxy operator [](size_t Row) {
+  __host__ Proxy operator[](size_t Row) {
     DEBUG_EXPR(assert(Row < Height));
     return Proxy{Row, Width, Elements};
   }
 
-  __host__
-  ConstProxy operator [](size_t Row) const {
+  __host__ ConstProxy operator[](size_t Row) const {
     DEBUG_EXPR(assert(Row < Height));
     return ConstProxy{Row, Width, Elements};
   }
 
-   __host__
-  const T *data() const {
-    return Elements.data();
-  }
+  __host__ const T *data() const { return Elements.data(); }
 
-   __host__
-  It begin() {
-    return Elements.begin();
-  }
+  __host__ It begin() { return Elements.begin(); }
 
-   __host__
-  It end() {
-    return Elements.end();
-  }
+  __host__ It end() { return Elements.end(); }
 
-   __host__
-  ConstIt begin() const {
-    return Elements.begin();
-  }
+  __host__ ConstIt begin() const { return Elements.begin(); }
 
-   __host__
-  ConstIt end() const {
-    return Elements.end();
-  }
+  __host__ ConstIt end() const { return Elements.end(); }
 
-   __host__
-  size_t w() const {
-    return Width;
-  }
+  __host__ size_t w() const { return Width; }
 
-   __host__
-  size_t h() const {
-    return Height;
-  }
+  __host__ size_t h() const { return Height; }
 
-  __host__
-  size_t size() const {
-    return Elements.size();
-  }
+  __host__ size_t size() const { return Elements.size(); }
 
-  __host__
-  static Matrix<T> transpose(const Matrix<T> &A) {
+  __host__ static Matrix<T> transpose(const Matrix<T> &A) {
     auto Res = Matrix<T>{A.w(), A.h()};
     for (size_t i = 0; i < A.h(); ++i)
       for (size_t j = 0; j < A.w(); ++j)
         Res[j][i] = A[i][j];
-    return Res; 
+    return Res;
   }
 };
 
-template <typename T>
-struct MatMulResult {
+template <typename T> struct MatMulResult {
   Matrix<T> Matr;
   long DurationMs;
 };
@@ -141,8 +107,7 @@ struct MatMulResult {
 
 namespace device {
 
-template <typename T>
-class Matrix {
+template <typename T> class Matrix {
   size_t Width = 0;
   size_t Height = 0;
   T *Elements = nullptr;
@@ -152,11 +117,10 @@ class Matrix {
     size_t Width = 0;
 
   public:
-    __device__
-    Proxy(size_t Width, T *RowElems) : RowElems{RowElems}, Width{Width} {}
+    __device__ Proxy(size_t Width, T *RowElems)
+        : RowElems{RowElems}, Width{Width} {}
 
-    __device__
-    T &operator [](size_t Col) {
+    __device__ T &operator[](size_t Col) {
       DEBUG_EXPR(assert(Col < Width));
       return RowElems[Col];
     }
@@ -164,65 +128,52 @@ class Matrix {
 
 public:
   using value_type = T;
-  
-  __host__
-  Matrix() {}
 
-  __host__
-  Matrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
+  __host__ Matrix() {}
+
+  __host__ Matrix(size_t Height, size_t Width) : Width{Width}, Height{Height} {
     auto Size = Width * Height * sizeof(float);
     CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
   }
 
-  __host__
-  Matrix(const host::Matrix<T> &HostMat) : Width{HostMat.w()}, Height{HostMat.h()} {
+  __host__ Matrix(const host::Matrix<T> &HostMat)
+      : Width{HostMat.w()}, Height{HostMat.h()} {
     auto Size = Width * Height * sizeof(T);
     CUDA_CHECK(cudaMalloc((void **)&Elements, Size));
-    CUDA_CHECK(cudaMemcpy(Elements, HostMat.data(), Size,
-                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(Elements, HostMat.data(), Size, cudaMemcpyHostToDevice));
   }
 
-  __host__ 
-  void free() { CUDA_CHECK(cudaFree(Elements)); }
+  __host__ void free() { CUDA_CHECK(cudaFree(Elements)); }
 
-  __host__
-  host::Matrix<T> getHostMatrix() const {
+  __host__ host::Matrix<T> getHostMatrix() const {
     auto SizeInType = Width * Height;
     auto *Buf = new T[SizeInType];
     CUDA_CHECK(cudaMemcpy(Buf, Elements, SizeInType * sizeof(T),
                           cudaMemcpyDeviceToHost));
-    auto HostMat = host::Matrix<T>{Buf, Buf + SizeInType, 
-                                Height, Width};
+    auto HostMat = host::Matrix<T>{Buf, Buf + SizeInType, Height, Width};
     delete[] Buf;
     return HostMat;
   }
 
-  __device__
-  Proxy operator[](size_t Row) {
+  __device__ Proxy operator[](size_t Row) {
     DEBUG_EXPR(assert(Row < Height));
     return Proxy{Width, Elements + Row * Width};
   }
 
-  __device__ __host__
-  size_t w() const {
-    return Width;
-  }
+  __device__ __host__ size_t w() const { return Width; }
 
-  __device__ __host__
-  size_t h() const {
-    return Height;
-  }
+  __device__ __host__ size_t h() const { return Height; }
 
   class Tile {
     size_t Size = 0;
     T *Elements;
 
   public:
-    __device__
-    Tile(size_t Size, T *Elements) : Size{Size}, Elements{Elements} {}
+    __device__ Tile(size_t Size, T *Elements)
+        : Size{Size}, Elements{Elements} {}
 
-    __device__
-    Proxy operator[](size_t Row) {
+    __device__ Proxy operator[](size_t Row) {
       DEBUG_EXPR(assert(Row < Size));
       return Proxy{Size, Elements + Row * Size};
     }

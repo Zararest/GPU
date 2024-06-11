@@ -15,10 +15,10 @@ int main(int Argc, char **Argv) {
     InFileName = CLPars.getOption("in-file");
   if (CLPars.getOption("out-file") != "")
     OutFileName = CLPars.getOption("out-file");
-  
+
   if (InFileName.empty())
     utils::reportFatalError("Specify graph");
-  
+
   auto IS = std::ifstream{InFileName};
   auto OS = std::ofstream{OutFileName};
   auto Graph = PBQP::Graph{};

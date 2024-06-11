@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace SSA {
 
@@ -20,7 +20,7 @@ class Instruction {
 } // namespace SSA
 
 namespace MIR {
-  
+
 class Register final {
   size_t ID;
   size_t Type;
@@ -37,4 +37,4 @@ public:
 class Spill final : public Instruction {};
 class Fill final : public Instruction {};
 
-} // namespace MIR 
+} // namespace MIR

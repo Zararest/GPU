@@ -1,13 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
 #include <set>
 #include <vector>
-#include <algorithm>
-#include <chrono>
 
 #define DEBUG
 
@@ -39,14 +39,12 @@ __device__ __host__ unsigned ceilDiv(T1 Lhs, T2 Rhs) {
   return ceil(LhsF / RhsF);
 }
 
-template <typename T1, typename T2>
-struct Pair {
+template <typename T1, typename T2> struct Pair {
   T1 First;
   T2 Second;
 };
 
-template <typename It>
-class IteratorRange {
+template <typename It> class IteratorRange {
   It Begin;
   It End;
 
@@ -57,13 +55,11 @@ public:
   It end() { return End; }
 };
 
-template <typename It>
-IteratorRange<It> makeRange(It Begin, It End) {
+template <typename It> IteratorRange<It> makeRange(It Begin, It End) {
   return IteratorRange<It>{Begin, End};
 }
 
-template <typename It>
-void print(It Beg, It End, std::ostream &S) {
+template <typename It> void print(It Beg, It End, std::ostream &S) {
   for (auto I : makeRange(Beg, End))
     S << I << " ";
   S << "\n";
@@ -80,10 +76,7 @@ std::set<T> sub(const std::set<size_t> &Lhs, const std::set<T> &Rhs) {
 void reportFatalError(const std::string &Msg);
 
 struct CLOption final {
-  enum class Type {
-    Flag,
-    String
-  };
+  enum class Type { Flag, String };
 
 private:
   std::string Name;
@@ -118,7 +111,7 @@ public:
 
   // If option has been matched returns iterator and info
   template <typename It>
-  std::pair<It, std::string> match(It Beg, It End) const { 
+  std::pair<It, std::string> match(It Beg, It End) const {
     if (Beg == End)
       return {Beg, ""};
     if (!matchName(*Beg))
@@ -127,15 +120,14 @@ public:
     return getArg(Beg, End);
   }
 
-  const std::string &getName() const {
-    return Name;
-  }
+  const std::string &getName() const { return Name; }
 };
 
 class CLParser final {
   std::vector<std::string> Args;
   std::vector<CLOption> Options;
   std::vector<std::pair<CLOption, std::string>> ParsedOptions;
+
 public:
   CLParser(int Argc, char **Argv) : Args(Argv + 1, Argv + Argc) {}
 
@@ -147,13 +139,12 @@ public:
     auto ArgsEnd = Args.end();
     for (auto It = Args.begin(); It != ArgsEnd;) {
       auto PrevIt = It;
-      std::for_each(Options.begin(), Options.end(), 
-                    [&](const CLOption &Opt) {
-                      auto [NewIt, Val] = Opt.match(It, ArgsEnd);
-                      It = NewIt;
-                      if (Val != "")
-                        ParsedOptions.emplace_back(Opt, std::move(Val));
-                    });
+      std::for_each(Options.begin(), Options.end(), [&](const CLOption &Opt) {
+        auto [NewIt, Val] = Opt.match(It, ArgsEnd);
+        It = NewIt;
+        if (Val != "")
+          ParsedOptions.emplace_back(Opt, std::move(Val));
+      });
       if (PrevIt == It)
         return false;
     }
@@ -162,19 +153,18 @@ public:
 
   std::string getOption(const std::string &Name) {
     auto It = std::find_if(ParsedOptions.begin(), ParsedOptions.end(),
-                            [&Name] (const auto &Opt) {
-                              if (Name == Opt.first.getName())
-                                return true;
-                              return false;
-                            });
+                           [&Name](const auto &Opt) {
+                             if (Name == Opt.first.getName())
+                               return true;
+                             return false;
+                           });
     if (It != ParsedOptions.end())
       return It->second;
     return "";
   }
 };
 
-template <typename T>
-size_t to_milliseconds(const T &Clck) {
+template <typename T> size_t to_milliseconds(const T &Clck) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(Clck).count();
 }
 

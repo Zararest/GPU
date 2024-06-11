@@ -47,4 +47,4 @@ bool isEqual(double Lhs, double Rhs) {
   return Rhs >= Lhs - Delta && Rhs <= Lhs + Delta;
 }
 
-} // namesapce utils
+} // namespace utils

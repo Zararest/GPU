@@ -1,7 +1,7 @@
 #pragma once
 
-#include "PBQP.h"
 #include "GPU-graph.h"
+#include "PBQP.h"
 
 #include <variant>
 
@@ -30,7 +30,7 @@ struct GPUSolver : public Solver {
   using Res_t = Pass::Res_t;
   using Pass_t = std::unique_ptr<Pass>;
   using Condition_t = std::unique_ptr<Condition>;
-  
+
   // Class to run all transformations
   class PassManager final {
     // If Condition::check() returns true, then pass in loop is being executed,
@@ -52,6 +52,7 @@ struct GPUSolver : public Solver {
 
     size_t getNextIdx(LoopHeader &Header, Res_t &Res, size_t CurIdx);
     Res_t runPass(Pass_t &Pass, Res_t PrevRes, Graph &Graph);
+
   public:
     using Profile_t = std::vector<std::pair<std::string, size_t>>;
 
@@ -77,7 +78,7 @@ struct GPUSolver : public Solver {
   };
 
   // Last pass in a pipeline
-  struct FinalPass : public Pass { 
+  struct FinalPass : public Pass {
 
     virtual Solution getSolution(const Graph &Graph, Res_t PrevResult) = 0;
 
@@ -85,7 +86,7 @@ struct GPUSolver : public Solver {
       auto Solution = this->getSolution(Graph, std::move(PrevResult));
       return Res_t{new FinalSolution(std::move(Solution))};
     }
-    
+
     virtual ~FinalPass() {}
   };
 
@@ -96,9 +97,7 @@ public:
   // Extension point for derivative classes
   virtual void addPasses(PassManager &PM) = 0;
   Solution solve(Graph Task) override;
-  PassManager::Profile_t getProfileInfo() const {
-    return PM.getProfileInfo();
-  }
+  PassManager::Profile_t getProfileInfo() const { return PM.getProfileInfo(); }
   virtual ~GPUSolver() {}
 };
 
@@ -116,10 +115,9 @@ struct GPUMock final : public GPUSolver {
 };
 
 // GPU solver with full search of optimal solution
-struct GPUFullSearch final : public GPUSolver {  
+struct GPUFullSearch final : public GPUSolver {
   void addPasses(PassManager &PM) override;
 };
-
 
 class HeuristicSolver final : public GPUSolver {
 
@@ -127,17 +125,17 @@ class HeuristicSolver final : public GPUSolver {
   //  finds nodes with degree 0 and selects best option
   struct R0Reduction final : public GPUSolver::Pass {
     static constexpr size_t BlockSize = 32;
-    
+
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
   // Pass that performs R0 reduction on graph:
-  //  finds a node that has only one neighbor 
+  //  finds a node that has only one neighbor
   //  and moves all costs to the neighbor
   struct R1Reduction final : public GPUSolver::Pass {
     static constexpr size_t BlockSize = 32;
     static constexpr size_t ThreadsPerReduction = 8;
-    
+
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
