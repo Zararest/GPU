@@ -48,11 +48,7 @@ void Graph::Node::changeCost(host::Matrix<Graph::Cost_t> NewCostVector) {
 }
 
 void Graph::Edge::print(std::ostream &OS) const {
-  for (size_t i = 0; i < CostMatrix.h(); ++i) {
-    for (size_t j = 0; j < CostMatrix.w(); ++j)
-      OS << CostMatrix[i][j] << " ";
-    OS << "\n";
-  }
+  utils::printMatrix(CostMatrix, OS);
 }
 
 void Graph::Node::print(std::ostream &OS) const {

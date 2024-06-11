@@ -8,6 +8,8 @@
 #include <thrust/host_vector.h>
 #include <thrust/reduce.h>
 
+#include <unordered_set>
+
 namespace PBQP {
 
 namespace {
@@ -243,11 +245,12 @@ __global__ void __getNodesToReduceR0(device::Graph Graph, char *NodesToReduce) {
 
   auto NumOfNeighb = 0u;
   for (unsigned i = 0; i < GraphSize; ++i) {
+    if (i == GlobalId)
+      continue;
     NumOfNeighb += AdjMatrix[i][GlobalId] != -1;
     NumOfNeighb += AdjMatrix[GlobalId][i] != -1;
   }
-  // every node has at least 2 "neighbors" because we count itself twice
-  NodesToReduce[GlobalId] = NumOfNeighb > 2u;
+  NodesToReduce[GlobalId] = NumOfNeighb == 0;
 }
 
 // returns vector with 0 and 1 with the size of the initial graph
@@ -264,8 +267,8 @@ getNodesToReduceR0(device::Graph &CurGraph, unsigned BlockSize) {
   return {NodesToReduceDevice, NumOfNodesToReduce};
 }
 
-void commitReductionToHost(thrust::host_vector<int> SelectionForNodes,
-                           device::Graph &GraphDevice, Solution &Sol) {
+void commitR0ReductionToHost(thrust::host_vector<int> SelectionForNodes,
+                             device::Graph &GraphDevice, Solution &Sol) {
   for (size_t NodeIdx = 0; NodeIdx < SelectionForNodes.size(); ++NodeIdx) {
     auto Selection = SelectionForNodes[NodeIdx];
     if (Selection >= 0) {
@@ -292,7 +295,7 @@ bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
   __R0Reduction<<<BlockGridDim, ThrBlockDim>>>(
       GraphDevice, thrust::raw_pointer_cast(NodesToReduceDevice.data()),
       thrust::raw_pointer_cast(SelectionForNodes.data()));
-  commitReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
+  commitR0ReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
   DEBUG_EXPR(std::cout << "Graph has been reduced: R0\n");
   return NumOfNodesToReduce != 0;
 }
@@ -398,6 +401,7 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   auto &AdjMatrix = Graph.getAdjMatrix();
   auto GraphSize = AdjMatrix.h();
   auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  auto NoEdge = -1;
 
   if (GlobalId >= GraphSize)
     return;
@@ -407,8 +411,8 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   for (unsigned i = 0; i < GraphSize; ++i) {
     if (i == GlobalId)
       continue;
-    bool HasOutEdge = AdjMatrix[GlobalId][i];
-    bool HasInEdge = AdjMatrix[i][GlobalId];
+    bool HasOutEdge = AdjMatrix[GlobalId][i] != NoEdge;
+    bool HasInEdge = AdjMatrix[i][GlobalId] != NoEdge;
     NumOfNeighbours += HasInEdge;
     NumOfNeighbours += HasOutEdge;
     if (HasOutEdge) {
@@ -429,12 +433,6 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   NodesToReduce[GlobalId] = CurNodesToReduce;
 }
 
-struct HasR1Reduction {
-  __device__ bool operator()(const NodesToReduceR1 &Nodes) {
-    return Nodes.canBeReduced();
-  }
-};
-
 class DependentSolutionsForDevice final {
   struct DeviceDependentSolution final {
     // This is an selections to be taken on Dependent node
@@ -447,17 +445,21 @@ class DependentSolutionsForDevice final {
   // defining selection to dependent one
   std::vector<DeviceDependentSolution> Solutions;
   thrust::device_vector<unsigned *> DeviceArrayOfReductions;
-  // std::unordered_map<>
 
 public:
   DependentSolutionsForDevice(
       device::Graph &GraphDevice, const Graph &Graph,
       thrust::host_vector<NodesToReduceR1> AllNodesToReduce) {
+    DEBUG_EXPR(std::cout << "Current graph:\n");
+    DEBUG_EXPR(GraphDevice.printAdjMatrix(std::cout));
+    DEBUG_EXPR(std::cout << "Nodes to reduce R1:\n");
     for (auto &NodesToReduce : AllNodesToReduce) {
       auto DefiningNodeDeviceIdx = NodesToReduce.getNeighbour();
       auto DefiningNodeHostIdx = GraphDevice.getHostNode(DefiningNodeDeviceIdx);
       auto DependentHostIdx =
           GraphDevice.getHostNode(NodesToReduce.getSingleNode());
+      DEBUG_EXPR(std::cout << NodesToReduce.getSingleNode() << " -- " 
+                  << NodesToReduce.getNeighbour() << " -- ...\n");
       if (!DefiningNodeHostIdx || !DependentHostIdx)
         utils::reportFatalError("Node has already been reduced");
       auto DefiningSolutionsSize = Graph.getNodesCostSize(*DefiningNodeHostIdx);
@@ -489,6 +491,22 @@ public:
   }
 };
 
+thrust::host_vector<NodesToReduceR1> 
+filterDependentNodes(thrust::host_vector<NodesToReduceR1> NodesToReduce) {
+  auto Res = thrust::host_vector<NodesToReduceR1>{};
+  auto UsedNodes = std::unordered_set<size_t>{};
+  for (auto &Nodes : NodesToReduce) {
+    if (!Nodes.canBeReduced())
+      continue;
+    auto SingleNode = Nodes.getSingleNode();
+    auto NeighbNode = Nodes.getNeighbour();
+    if (UsedNodes.count(SingleNode) || UsedNodes.count(NeighbNode))
+      continue;
+    Res.push_back(Nodes);
+  }
+  return Res;
+}
+
 thrust::device_vector<NodesToReduceR1>
 getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   auto NumOfNodes = CurGraph.size();
@@ -498,18 +516,13 @@ getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   __getNodesToReduceR1<<<BlockGridDim, ThrBlockDim>>>(
       CurGraph, thrust::raw_pointer_cast(NodesToReduceDevice.data()));
 
-  auto NumOfReductions =
-      thrust::count_if(thrust::device, NodesToReduceDevice.begin(),
-                       NodesToReduceDevice.end(), HasR1Reduction());
-  if (NumOfReductions == 0)
-    return thrust::device_vector<NodesToReduceR1>{};
+  auto IndependentNodesToReduce = 
+    filterDependentNodes(NodesToReduceDevice);
+  return {IndependentNodesToReduce};
+}
 
-  auto OnlyNodesToReduce =
-      thrust::device_vector<NodesToReduceR1>(NumOfReductions);
-  thrust::copy_if(thrust::device, NodesToReduceDevice.begin(),
-                  NodesToReduceDevice.end(), OnlyNodesToReduce.begin(),
-                  HasR1Reduction());
-  return OnlyNodesToReduce;
+void commitR1ReductionToHost() {
+  // FIXME !!!!
 }
 
 bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
@@ -532,6 +545,8 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
       GraphDevice, thrust::raw_pointer_cast(OnlyNodesToReduce.data()),
       DependentSolutionsContainer.getPointerToSolutions(),
       OnlyNodesToReduce.size(), ThreadsPerReduction);
+
+  commitR1ReductionToHost();
 
   DependentSolutionsContainer.addBounedSelections(Sol);
   return true;
@@ -682,7 +697,7 @@ struct FinalMock final : public GPUSolver::FinalPass {
     if (!ResPtr)
       utils::reportFatalError("Invalid loop state in R0 reduction");
     auto &Sol = ResPtr->getMetadata().getSolution();
-    DEBUG_EXPR(std::cout << "Solution:");
+    DEBUG_EXPR(std::cout << "Solution:\n");
     DEBUG_EXPR(Sol.printSummary(std::cout));
     return Solution{};
   }

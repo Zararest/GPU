@@ -107,6 +107,10 @@ public:
 
   __host__ void removeUnreachableNodes();
 
+  __host__ void printAdjMatrix(std::ostream &S) const {
+    utils::printMatrix(HostAdjMatrix, S);
+  }
+
   __device__ device::Matrix<Index_t> &getAdjMatrix() { return AdjMatrix; }
 
   __device__ device::Matrix<Cost_t> &getCostMatrix(Index_t Index) {

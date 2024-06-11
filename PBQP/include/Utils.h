@@ -66,6 +66,15 @@ template <typename It> void print(It Beg, It End, std::ostream &S) {
 }
 
 template <typename T>
+void printMatrix(const T &Matrix, std::ostream &S) {
+  for (size_t i = 0; i < Matrix.h(); ++i) {
+    for (size_t j = 0; j < Matrix.w(); ++j)
+      S << Matrix[i][j] << " ";
+    S << "\n";
+  }
+}
+
+template <typename T>
 std::set<T> sub(const std::set<size_t> &Lhs, const std::set<T> &Rhs) {
   auto Ans = Lhs;
   for (auto I : Rhs)
