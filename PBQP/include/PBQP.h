@@ -142,6 +142,8 @@ class Solution final {
     // returns {NodeIdx, Selection}
     std::pair<size_t, size_t>
     getDependentSolution(size_t DefiningSelection) const {
+      DEBUG_EXPR(std::cout << "Defining selection: " << DefiningSelection << " with size: " 
+                           << DefiningSelectionsToDependent.size() << "\n");
       if (DefiningSelection >= DefiningSelectionsToDependent.size())
         utils::reportFatalError("Invalid defining selection");
       return {DependentNode, DefiningSelectionsToDependent[DefiningSelection]};
@@ -156,6 +158,13 @@ class Solution final {
         return Sol.DependentNode;
       }
     };
+
+    void print(std::ostream &S) const {
+      S << DependentNode << " <- " << DefiningNode << "\n";
+      for (auto Selection : DefiningSelectionsToDependent) 
+        S << Selection << " ";
+      S << "\n";
+    }
   };
 
   // intermediate solution might have no graph in it

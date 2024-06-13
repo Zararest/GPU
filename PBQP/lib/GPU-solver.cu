@@ -314,6 +314,7 @@ class NodesToReduceR1 {
 
 public:
   __host__ __device__ void addSingleNode(int NewNode) {
+    assert(NewNode >= 0);
     NodeWithSingleNeighb = NewNode;
   }
 
@@ -421,6 +422,7 @@ __device__ void __performR1Reduction(device::Graph &Graph,
                                                      CostMatrix,
                                                      SingleNodeVec,
                                                      Nodes);
+    assert(BestSelection < 100);
     DependentSolutions[CurNeighbSelection] = BestSelection;
     NeighbNodeVec[CurNeighbSelection][0] += AdditionalCost;
   }
@@ -447,6 +449,15 @@ __global__ void __R1Reduction(device::Graph Graph,
     __performR1Reduction(Graph, NodesToReduce[ReductionId],
                          DependentSolutions[ReductionId], ThreadIdInReduction,
                          ThreadsPerReduction);
+  return;
+  if (GlobalId == 0) {
+    printf("Selections on device:\n");
+    for (int j = 0; j < NumberOfReductions; j++) {
+      for (int i = 0; i < 13; i++)
+        printf("%i ", DependentSolutions[j][i]);
+      printf("\n");
+    }
+  }
 }
 
 __global__ void __getNodesToReduceR1(device::Graph Graph,
@@ -502,7 +513,7 @@ class DependentSolutionsForDevice final {
 public:
   DependentSolutionsForDevice(
       device::Graph &GraphDevice, const Graph &Graph,
-      thrust::host_vector<NodesToReduceR1> AllNodesToReduce) {
+      const thrust::host_vector<NodesToReduceR1> &AllNodesToReduce) {
     DEBUG_EXPR(std::cout << "Current graph:\n");
     DEBUG_EXPR(GraphDevice.printAdjMatrix(std::cout));
     DEBUG_EXPR(std::cout << "Nodes to reduce R1:\n");
@@ -525,7 +536,7 @@ public:
     for (auto &DeviceSelectionVector : Solutions)
       PointersToSolutions.push_back(thrust::raw_pointer_cast(
           DeviceSelectionVector.DependentSelections.data()));
-    DeviceArrayOfReductions = std::move(PointersToSolutions);
+    DeviceArrayOfReductions = PointersToSolutions;
   }
 
   auto getPointerToSolutions() {
@@ -536,6 +547,10 @@ public:
     for (auto &DependentSolution : Solutions) {
       auto DefiningSelectionsToDependent =
           thrust::host_vector<unsigned>{DependentSolution.DependentSelections};
+      DEBUG_EXPR(std::cout << "In container for solutions\n");
+      DEBUG_EXPR(for (auto Selection : DefiningSelectionsToDependent)
+        std::cout << Selection << " ");
+      DEBUG_EXPR(std::cout << "\n");
       Sol.addBoundedSolution(DependentSolution.DependentHostIdx,
                              DependentSolution.DefiningHostIdx,
                              {DefiningSelectionsToDependent.begin(),
@@ -612,7 +627,7 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
   auto HostOnlyNodesToReduce =
       thrust::host_vector<NodesToReduceR1>(OnlyNodesToReduce);
   auto DependentSolutionsContainer = DependentSolutionsForDevice(
-      GraphDevice, Graph, std::move(HostOnlyNodesToReduce));
+      GraphDevice, Graph, HostOnlyNodesToReduce);
   auto NumOfThreads = OnlyNodesToReduce.size() * ThreadsPerReduction;
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(NumOfThreads, ThrBlockDim.x)};
@@ -623,7 +638,8 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
   cudaDeviceSynchronize();
   utils::checkKernelsExec();
 
-  commitR1ReductionToHost(OnlyNodesToReduce, GraphDevice, 
+  // FIXME Probably there is a memory leak because OnlyNodesToReduce causes error
+  commitR1ReductionToHost(HostOnlyNodesToReduce, GraphDevice, 
                           DependentSolutionsContainer, Sol);
 
   return true;

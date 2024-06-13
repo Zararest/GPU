@@ -282,7 +282,11 @@ const Graph &Solution::getGraph() const {
 
 void Solution::resolveBoundedSolutions() {
   auto Changed = true;
+  DEBUG_EXPR(std::cout << "Bounded solutions: \n");
+  DEBUG_EXPR(for (auto &BoundedSol : BoundedSolutions) 
+                BoundedSol.print(std::cout););
   while (Changed) {
+    DEBUG_EXPR(std::cout << "In loop\n");
     auto NewSolutons = std::unordered_map<size_t, size_t>{};
     for (auto &BoundedSol : BoundedSolutions) {
       auto DefiningNode = BoundedSol.getDefiningNode();
