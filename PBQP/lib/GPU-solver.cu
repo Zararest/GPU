@@ -245,23 +245,26 @@ __global__ void __getNodesToReduceR0(device::Graph Graph, char *NodesToReduce) {
 
   auto NumOfNeighb = 0u;
   for (unsigned i = 0; i < GraphSize; ++i) {
-    if (i == GlobalId)
-      continue;
     NumOfNeighb += AdjMatrix[i][GlobalId] != -1;
     NumOfNeighb += AdjMatrix[GlobalId][i] != -1;
   }
-  NodesToReduce[GlobalId] = NumOfNeighb == 0;
+  // We count node itself twice
+  NodesToReduce[GlobalId] = NumOfNeighb == 2;
 }
 
 // returns vector with 0 and 1 with the size of the initial graph
 std::pair<thrust::device_vector<char>, size_t>
 getNodesToReduceR0(device::Graph &CurGraph, unsigned BlockSize) {
   auto NumOfNodes = CurGraph.size();
+  if (NumOfNodes == 0)
+    return {{}, 0};
   auto NodesToReduceDevice = thrust::device_vector<char>(NumOfNodes);
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(NumOfNodes, ThrBlockDim.x)};
   __getNodesToReduceR0<<<BlockGridDim, ThrBlockDim>>>(
       CurGraph, thrust::raw_pointer_cast(NodesToReduceDevice.data()));
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();    
   auto NumOfNodesToReduce =
       thrust::reduce(NodesToReduceDevice.begin(), NodesToReduceDevice.end());
   return {NodesToReduceDevice, NumOfNodesToReduce};
@@ -298,6 +301,8 @@ bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
   __R0Reduction<<<BlockGridDim, ThrBlockDim>>>(
       GraphDevice, thrust::raw_pointer_cast(NodesToReduceDevice.data()),
       thrust::raw_pointer_cast(SelectionForNodes.data()));
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
   commitR0ReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
   return NumOfNodesToReduce != 0;
 }
@@ -560,11 +565,15 @@ filterDependentNodes(thrust::host_vector<NodesToReduceR1> NodesToReduce) {
 thrust::device_vector<NodesToReduceR1>
 getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   auto NumOfNodes = CurGraph.size();
+  if (NumOfNodes == 0)
+    return {};
   auto NodesToReduceDevice = thrust::device_vector<NodesToReduceR1>(NumOfNodes);
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(NumOfNodes, ThrBlockDim.x)};
   __getNodesToReduceR1<<<BlockGridDim, ThrBlockDim>>>(
       CurGraph, thrust::raw_pointer_cast(NodesToReduceDevice.data()));
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
 
   auto IndependentNodesToReduce = 
     filterDependentNodes(NodesToReduceDevice);
@@ -581,6 +590,8 @@ void commitR1ReductionToHost(thrust::host_vector<NodesToReduceR1> ReducedNodes,
   for (auto &Reduced : ReducedNodes) {
     auto NodeToRemove = Reduced.getSingleNode();
     auto Neighb = Reduced.getNeighbour();
+    DEBUG_EXPR(std::cout << "Removing nodes " << NodeToRemove 
+                << " -- " << Neighb << " ... from host adj matrix\n");
     GraphDevice.makeCostUnreachable(Neighb, NodeToRemove);
     GraphDevice.makeCostUnreachable(NodeToRemove, Neighb);
     GraphDevice.makeCostUnreachable(NodeToRemove, NodeToRemove);
@@ -609,11 +620,18 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
       GraphDevice, thrust::raw_pointer_cast(OnlyNodesToReduce.data()),
       DependentSolutionsContainer.getPointerToSolutions(),
       OnlyNodesToReduce.size(), ThreadsPerReduction);
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
 
   commitR1ReductionToHost(OnlyNodesToReduce, GraphDevice, 
                           DependentSolutionsContainer, Sol);
 
   return true;
+}
+
+void performFullSearch(device::Graph &GraphDevice, const Graph &Graph,
+                       Solution &Sol, unsigned BlockSize) {
+
 }
 
 } // anonymous namespace
@@ -792,7 +810,7 @@ struct GraphChangeChecker final : public GPUSolver::Pass {
 };
 
 GPUSolver::Res_t
-HeuristicSolver::R0Reduction::run(const Graph &Graph,
+ReductionsSolver::R0Reduction::run(const Graph &Graph,
                                   GPUSolver::Res_t PrevResult) {
   auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
   if (!ResPtr)
@@ -806,11 +824,11 @@ HeuristicSolver::R0Reduction::run(const Graph &Graph,
 }
 
 GPUSolver::Res_t
-HeuristicSolver::R1Reduction::run(const Graph &Graph,
+ReductionsSolver::R1Reduction::run(const Graph &Graph,
                                   GPUSolver::Res_t PrevResult) {
   auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
   if (!ResPtr)
-    utils::reportFatalError("Invalid loop state in R0 reduction");
+    utils::reportFatalError("Invalid loop state in R1 reduction");
   auto &Metadata = ResPtr->getMetadata();
   bool Changed = performR1Reduction(Metadata.getDeviceGraph(), Graph,
                                     Metadata.getSolution(), BlockSize,
@@ -821,7 +839,20 @@ HeuristicSolver::R1Reduction::run(const Graph &Graph,
 }
 
 GPUSolver::Res_t
-HeuristicSolver::CleanUpPass::run(const Graph &Graph,
+ReductionsSolver::FinalFullSearch::run(const Graph &Graph,
+                                       GPUSolver::Res_t PrevResult) {
+  auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+  if (!ResPtr)
+    utils::reportFatalError("Invalid loop state in full search");
+  auto &Metadata = ResPtr->getMetadata();
+  performFullSearch(Metadata.getDeviceGraph(), Graph,
+                    Metadata.getSolution(), BlockSize);
+  return Res_t{new GPUResult(std::move(Metadata.getDeviceGraph()), 
+                             std::move(Metadata.getSolution()))};
+}
+
+GPUSolver::Res_t
+ReductionsSolver::CleanUpPass::run(const Graph &Graph,
                                   GPUSolver::Res_t PrevResult) {
   auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
   if (!ResPtr)
@@ -831,15 +862,16 @@ HeuristicSolver::CleanUpPass::run(const Graph &Graph,
   return PrevResult;
 }
 
-void HeuristicSolver::addPasses(PassManager &PM) {
+void ReductionsSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
-  PM.addPass(Pass_t{new R0Reduction});
-  PM.addPass(Pass_t{new R1Reduction});
-  PM.addPass(Pass_t{new CleanUpPass});
-  PM.addPass(Pass_t{new GraphChangeChecker});
+    PM.addPass(Pass_t{new R1Reduction});
+    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new CleanUpPass});
+    PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
-  PM.addPass(Pass_t{new FinalMock});
+  PM.addPass(Pass_t{new FinalFullSearch});
+  PM.addPass(Pass_t{new GraphDeleter});
 }
 
 } // namespace PBQP

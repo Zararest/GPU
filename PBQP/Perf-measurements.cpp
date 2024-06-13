@@ -31,7 +31,8 @@ size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   if (!OnlyTime)
     printProfileInfo(ProfileInfo);
 
-  auto SolutionOS = std::ofstream{"GPU-" + AnsFileName};
+  auto SolutionOS = std::ofstream(AnsFileName + "-GPU.dot");
+  assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
   return utils::to_milliseconds(End - Start);
 }
@@ -48,7 +49,8 @@ size_t measureCPU(const std::string &InFileName,
   auto Solution = Solver.solve(std::move(Graph));
   auto End = std::chrono::steady_clock::now();
 
-  auto SolutionOS = std::ofstream{"CPU-" + AnsFileName};
+  auto SolutionOS = std::ofstream(AnsFileName + "-CPU.dot");
+  assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
   return utils::to_milliseconds(End - Start);
 }
@@ -58,29 +60,38 @@ void checkSolution(const std::string &InFileName) {
   auto Graph = PBQP::Graph{};
   Graph.read(IS);
   assert(Graph.validate());
-  auto CPUSolver = PBQP::CPUFullSearch{};
-  auto GPUSolver = PBQP::GPUFullSearch{};
+  auto GPUSolver = PBQP::ReductionsSolver{};
+  auto RefSolver = PBQP::GPUFullSearch{};
 
-  auto CPUAns = CPUSolver.solve(PBQP::Graph::copy(Graph));
+  auto RefAns = RefSolver.solve(PBQP::Graph::copy(Graph));
   auto GPUAns = GPUSolver.solve(PBQP::Graph::copy(Graph));
 
-  if (!utils::isEqual(CPUAns.getFinalCost(), GPUAns.getFinalCost()))
-    utils::reportFatalError("Differen answers: CPU[" +
-                            std::to_string(CPUAns.getFinalCost()) + "] GPU[" +
+  if (!utils::isEqual(RefAns.getFinalCost(), GPUAns.getFinalCost()))
+    utils::reportFatalError("Differen answers: Ref[" +
+                            std::to_string(RefAns.getFinalCost()) + "] GPU[" +
                             std::to_string(GPUAns.getFinalCost()) + "]");
 }
 
-void runHeuristic(const std::string &InFileName) {
+size_t measureReductions(const std::string &InFileName,
+                  const std::string &AnsFileName) {
   auto IS = std::ifstream{InFileName};
   auto Graph = PBQP::Graph{};
   Graph.read(IS);
   assert(Graph.validate());
 
-  auto Solver = PBQP::HeuristicSolver{};
-  Solver.solve(std::move(Graph));
+  auto Solver = PBQP::ReductionsSolver{};
+
+  auto Start = std::chrono::steady_clock::now();
+  auto Solution = Solver.solve(std::move(Graph));
+  auto End = std::chrono::steady_clock::now();
 
   auto ProfileInfo = Solver.getProfileInfo();
   printProfileInfo(ProfileInfo);
+
+  auto SolutionOS = std::ofstream{AnsFileName + "-reductions.dot"};
+  assert(SolutionOS.is_open());
+  Solution.print(SolutionOS);
+  return utils::to_milliseconds(End - Start);
 }
 
 int main(int Argc, char **Argv) {
@@ -133,7 +144,10 @@ int main(int Argc, char **Argv) {
   }
 
   if (UseHeuristic) {
-    runHeuristic(InFileName);
+    auto Time = measureReductions(InFileName, OutFileName);
+    OutString = std::to_string(Time) + "\n";
+    if (!OnlyTime)
+      OutString = "Reductions on GPU time: " + std::to_string(Time) + "ms\n";
   }
 
   std::cout << OutString << std::endl;

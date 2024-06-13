@@ -119,7 +119,7 @@ struct GPUFullSearch final : public GPUSolver {
   void addPasses(PassManager &PM) override;
 };
 
-class HeuristicSolver final : public GPUSolver {
+class ReductionsSolver final : public GPUSolver {
 
   // Pass that performs R0 reduction on graph:
   //  finds nodes with degree 0 and selects best option
@@ -135,6 +135,12 @@ class HeuristicSolver final : public GPUSolver {
   struct R1Reduction final : public GPUSolver::Pass {
     static constexpr size_t BlockSize = 32;
     static constexpr size_t ThreadsPerReduction = 8;
+
+    Res_t run(const Graph &Graph, Res_t PrevResult) override;
+  };
+
+  struct FinalFullSearch final : public GPUSolver::Pass {
+    static constexpr size_t BlockSize = 32;
 
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };

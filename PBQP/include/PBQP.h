@@ -163,7 +163,7 @@ class Solution final {
   // node's index to choise
   std::map<size_t, size_t> SelectedVariants;
   std::unordered_set<BoundedSolution, BoundedSolution::Hash> BoundedSolutions;
-  Graph::Cost_t FinalCost = 0;
+  std::optional<Graph::Cost_t> FinalCost;
   static constexpr std::string_view AnswerNodeColour =
       "color=coral, fontsize=18, style=filled, shape=oval";
   static constexpr std::string_view SolutionColour =
@@ -171,11 +171,13 @@ class Solution final {
 
   void resolveBoundedSolutions();
 
+  Graph::Cost_t calcFinalCost() const;
+
 public:
   Solution() = default;
   Solution(Graph InitialGraph) : InitialGraph{std::move(InitialGraph)} {}
 
-  bool isFinal() const { return InitialGraph.has_value(); }
+  bool isFinal() const { return InitialGraph.has_value() && FinalCost.has_value(); }
   void makeFinal(Graph InitialGraphIn);
   const Graph &getGraph() const;
   void clear() { SelectedVariants.clear(); }
@@ -190,7 +192,11 @@ public:
     return SelectedVariants.insert({NodeIdx, Select}).second;
   }
   void addFinalCost(Graph::Cost_t NewFinalCost) { FinalCost = NewFinalCost; }
-  Graph::Cost_t getFinalCost() const { return FinalCost; }
+  Graph::Cost_t getFinalCost() const { 
+    if (!FinalCost)
+      utils::reportFatalError("Can't get final cost: solution is not final");
+    return *FinalCost; 
+  }
   void print(std::ostream &OS) const;
   void printSummary(std::ostream &OS) const;
 };

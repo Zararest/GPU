@@ -1,0 +1,13 @@
+graph Dump {
+node[color=red, fontsize=14, style=filled, shape=oval]
+"Solution:134.346" [color=coral, fontsize=18, style=filled, shape=oval]
+"0x607dd7f0a260" [label = "0::0 0"]
+"0x607dd7f0a310" [label = "0::1 1"]
+"0x607dd7f0a4a0" [label = "2::0 0"]
+"0x607dd7f0a580" [label = "2::1 0"]
+"0x607dd7f0a6f0" [label = "1::0 0"]
+"0x607dd7f0a850" [label = "3::0 1"]
+"0x607dd7f0a920" [label = "4::0 1"]
+"0x607dd7f0a260" -- "0x607dd7f0a310"
+"0x607dd7f0a4a0" -- "0x607dd7f0a580"
+}

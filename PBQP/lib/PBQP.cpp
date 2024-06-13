@@ -275,8 +275,8 @@ void Graph::read(std::istream &IS) {
 }
 
 const Graph &Solution::getGraph() const {
-  if (!isFinal())
-    utils::reportFatalError("Only final solution has graph");
+  if (!InitialGraph)
+    utils::reportFatalError("Initial graph has not been loaded yet");
   return *InitialGraph;
 }
 
@@ -304,11 +304,52 @@ void Solution::resolveBoundedSolutions() {
     utils::reportFatalError("There are unresolved noeds");
 }
 
+Graph::Cost_t Solution::calcFinalCost() const {
+  auto Beg = InitialGraph->nodesBeg();
+  auto End = InitialGraph->nodesEnd();
+  auto TotalCost = Graph::Cost_t{0};
+  auto NodePtrToIdx = std::map<const Graph::Node *, size_t>{};
+  for (size_t Idx = 0; Beg != End; ++Idx, ++Beg)
+    NodePtrToIdx[Beg->get()] = Idx;
+
+  for (auto [NodePtr, Idx] : NodePtrToIdx) {
+    assert(SelectedVariants.find(Idx) != SelectedVariants.end());
+    auto Selection = SelectedVariants.find(Idx)->second;
+    TotalCost += NodePtr->getCost(Selection);
+  }
+
+  auto GetSelection = 
+    [&](const Graph::Node *NodePtr) {
+      assert(NodePtrToIdx.find(NodePtr) != NodePtrToIdx.end());
+      auto Idx = NodePtrToIdx.find(NodePtr)->second;
+      assert(SelectedVariants.find(Idx) != SelectedVariants.end());
+      return SelectedVariants.find(Idx)->second;
+    };
+
+  for (auto &Edge : utils::makeRange(InitialGraph->edgesBeg(), 
+                                     InitialGraph->edgesEnd())) {
+    auto [LhsNode, RhsNode] = Edge->getNodes();
+    auto LhsSelection = GetSelection(LhsNode);
+    auto RhsSelection = GetSelection(RhsNode);
+    TotalCost += Edge->getCost(LhsSelection, RhsSelection);
+  }
+
+  if (FinalCost && TotalCost != FinalCost)
+    utils::reportFatalError("Selections and final cost are not coherent");
+  return TotalCost;
+}
+
 void Solution::makeFinal(Graph InitialGraphIn) {
   if (isFinal())
     utils::reportFatalError("Solution is already final");
   resolveBoundedSolutions();
   InitialGraph = std::move(InitialGraphIn);
+  auto NumOfUnresolvedNodes = 
+    std::abs(static_cast<int>(InitialGraph->size() - SelectedVariants.size()));
+  if (NumOfUnresolvedNodes != 0)
+    utils::reportFatalError("There are " + 
+      std::to_string(NumOfUnresolvedNodes) + " unresolved nodes");
+  FinalCost = calcFinalCost();
 }
 
 void Solution::print(std::ostream &OS) const {
@@ -318,7 +359,7 @@ void Solution::print(std::ostream &OS) const {
   OS << "graph Dump {\n"
      << "node[" << SolutionColour << "]\n";
 
-  OS << "\"Solution:" << FinalCost << "\" [" << AnswerNodeColour << "]\n";
+  OS << "\"Solution:" << *FinalCost << "\" [" << AnswerNodeColour << "]\n";
 
   auto Beg = InitialGraph->nodesBeg();
   auto End = InitialGraph->nodesEnd();
