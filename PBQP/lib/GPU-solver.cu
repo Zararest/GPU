@@ -74,7 +74,7 @@ __global__ void __calcCosts(device::Graph Graph, Graph::Cost_t *AllCosts,
 
 // Returns number of selection for node
 //  and removes cost vector of a given node from AdjMatrix
-__device__ int reduceNodeR0(device::Graph &Graph, unsigned NodeId) {
+__device__ int __reduceNodeR0(device::Graph &Graph, unsigned NodeId) {
   auto CostVectorId = Graph.getAdjMatrix()[NodeId][NodeId];
   assert(CostVectorId >= 0);
   auto &CostVector = Graph.getCostMatrix(CostVectorId);
@@ -98,7 +98,7 @@ __global__ void __R0Reduction(device::Graph Graph, char *NodesToReduce,
   auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
   auto NumOfNodes = Graph.getAdjMatrix().w();
   if (GlobalId < NumOfNodes && NodesToReduce[GlobalId] == 1)
-    SelectionForNodes[GlobalId] = reduceNodeR0(Graph, GlobalId);
+    SelectionForNodes[GlobalId] = __reduceNodeR0(Graph, GlobalId);
 }
 
 // Class for passing device::Graph through PassManager
@@ -282,9 +282,12 @@ void commitR0ReductionToHost(thrust::host_vector<int> SelectionForNodes,
 
 bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
                         Solution &Sol, unsigned BlockSize) {
+  DEBUG_EXPR(std::cout << "\n---------------------\n");
   DEBUG_EXPR(std::cout << "Performing R0 reduction\n");
   auto [NodesToReduceDevice, NumOfNodesToReduce] =
       getNodesToReduceR0(GraphDevice, BlockSize);
+  DEBUG_EXPR(std::cout << "Found " << NumOfNodesToReduce
+                       << " nodes\n");
   if (NumOfNodesToReduce == 0)
     return false;
 
@@ -296,7 +299,6 @@ bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
       GraphDevice, thrust::raw_pointer_cast(NodesToReduceDevice.data()),
       thrust::raw_pointer_cast(SelectionForNodes.data()));
   commitR0ReductionToHost(std::move(SelectionForNodes), GraphDevice, Sol);
-  DEBUG_EXPR(std::cout << "Graph has been reduced: R0\n");
   return NumOfNodesToReduce != 0;
 }
 
@@ -322,16 +324,16 @@ public:
     return static_cast<unsigned>(Heighbour);
   }
 
-  __host__ __device__ void addAdjMatrixPos(unsigned X, unsigned Y) {
-    MatrixPos.First = X;
-    MatrixPos.Second = Y;
+  __host__ __device__ void addAdjMatrixPos(unsigned Y, unsigned X) {
+    MatrixPos.First = Y;
+    MatrixPos.Second = X;
   }
 
   __host__ __device__ bool canBeReduced() const {
     return NodeWithSingleNeighb != -1 && Heighbour != -1;
   }
 
-  __host__ __device__ utils::Pair<unsigned, unsigned> getPosOfAdjMatix() const {
+  __host__ __device__ utils::Pair<unsigned, unsigned> getPosOfCostMatix() const {
     assert(MatrixPos.First != -1 && MatrixPos.Second != -1);
     return utils::Pair<unsigned, unsigned>{
         static_cast<unsigned>(MatrixPos.First),
@@ -351,7 +353,7 @@ public:
   //  this class translates selcetions in terms of Single/Neighb
   //  into real matrix pos.
   template <typename T>
-  __device__ auto getCostFromAdjMatrix(device::Matrix<T> &CostMatrix,
+  __device__ auto getCostForSelections(device::Matrix<T> &CostMatrix,
                                        unsigned SingleNodeSelection,
                                        unsigned NeighbourSelection) {
     if (NodeWithSingleNeighb == MatrixPos.First)
@@ -359,6 +361,27 @@ public:
     return CostMatrix[NeighbourSelection][SingleNodeSelection];
   }
 };
+
+__device__ utils::Pair<unsigned, Graph::Cost_t> 
+__getBestDependentSelection(unsigned NeighbSelection, 
+                            device::Matrix<Graph::Cost_t> &CostMatrix,
+                            device::Matrix<Graph::Cost_t> &SingleNodeVec,
+                            NodesToReduceR1 &Nodes) {
+  auto NumOfSelections = SingleNodeVec.h();
+  auto MinCost = SingleNodeVec[0][0] + 
+    Nodes.getCostForSelections(CostMatrix, 0u /*SingleNodeSelection*/, NeighbSelection);
+  auto BestSelection = 0u;
+  for (unsigned CurDependSelection = 0u; CurDependSelection < NumOfSelections;
+       ++CurDependSelection) {
+    auto CurCost = SingleNodeVec[CurDependSelection][0] + 
+      Nodes.getCostForSelections(CostMatrix, CurDependSelection, NeighbSelection);
+    if (CurCost < MinCost) {
+      MinCost = CurCost;
+      BestSelection = CurDependSelection;
+    }
+  }
+  return {BestSelection, MinCost};
+}
 
 // R1 reduction:
 //   Single -> Neighb -> ...
@@ -377,7 +400,32 @@ __device__ void __performR1Reduction(device::Graph &Graph,
                                      unsigned ThreadsPerReduction) {
   auto Single = Nodes.getSingleNode();
   auto Neighb = Nodes.getNeighbour();
-  // FIXME!!!!!
+  auto [PosY, PosX] = Nodes.getPosOfCostMatix();
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto CostMatrixIdx = AdjMatrix[PosY][PosX];
+  auto &CostMatrix = Graph.getCostMatrix(CostMatrixIdx);
+  auto &SingleNodeVec = Graph.getCostMatrix(Single);
+  auto &NeighbNodeVec = Graph.getCostMatrix(Neighb);
+  auto NumOfDefiningSolutions = NeighbNodeVec.h();
+
+  assert(ThreadsPerReduction > 0);
+  for (auto CurNeighbSelection = ThreadIdInReduction; 
+       CurNeighbSelection < NumOfDefiningSolutions; 
+       CurNeighbSelection += ThreadsPerReduction) {
+    auto [BestSelection, AdditionalCost] = __getBestDependentSelection(CurNeighbSelection,
+                                                     CostMatrix,
+                                                     SingleNodeVec,
+                                                     Nodes);
+    DependentSolutions[CurNeighbSelection] = BestSelection;
+    NeighbNodeVec[CurNeighbSelection][0] += AdditionalCost;
+  }
+
+  // Removes cost matrix and cost vector of the removed node
+  if (ThreadIdInReduction == 0) {
+    constexpr auto NoNode = -1;
+    AdjMatrix[PosY][PosX] = NoNode;
+    AdjMatrix[Single][Single] = NoNode;
+  }
 }
 
 // Each R1 reduction performs with ThreadsPerReduction threads
@@ -502,6 +550,8 @@ filterDependentNodes(thrust::host_vector<NodesToReduceR1> NodesToReduce) {
     auto NeighbNode = Nodes.getNeighbour();
     if (UsedNodes.count(SingleNode) || UsedNodes.count(NeighbNode))
       continue;
+    UsedNodes.emplace(SingleNode);
+    UsedNodes.emplace(NeighbNode);
     Res.push_back(Nodes);
   }
   return Res;
@@ -521,16 +571,30 @@ getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   return {IndependentNodesToReduce};
 }
 
-void commitR1ReductionToHost() {
-  // FIXME !!!!
+void commitR1ReductionToHost(thrust::host_vector<NodesToReduceR1> ReducedNodes,
+                             device::Graph &GraphDevice,
+                             DependentSolutionsForDevice &DependentSolutionsContainer, 
+                             Solution &Sol) {
+  // State of the device matrix should be changed in the device code
+  //  so this funcntion should make host state the same as device one.
+  DependentSolutionsContainer.addBounedSelections(Sol);
+  for (auto &Reduced : ReducedNodes) {
+    auto NodeToRemove = Reduced.getSingleNode();
+    auto Neighb = Reduced.getNeighbour();
+    GraphDevice.makeCostUnreachable(Neighb, NodeToRemove);
+    GraphDevice.makeCostUnreachable(NodeToRemove, Neighb);
+    GraphDevice.makeCostUnreachable(NodeToRemove, NodeToRemove);
+  }
 }
 
 bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
                         Solution &Sol, unsigned BlockSize,
                         unsigned ThreadsPerReduction) {
+  DEBUG_EXPR(std::cout << "\n---------------------\n");
+  DEBUG_EXPR(std::cout << "Performing R1 reduction\n");
   auto OnlyNodesToReduce = getNodesToReduceR1(GraphDevice, BlockSize);
   DEBUG_EXPR(std::cout << "Found " << OnlyNodesToReduce.size()
-                       << " nodes for R1\n");
+                       << " nodes\n");
   if (OnlyNodesToReduce.size() == 0)
     return false;
 
@@ -546,9 +610,9 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
       DependentSolutionsContainer.getPointerToSolutions(),
       OnlyNodesToReduce.size(), ThreadsPerReduction);
 
-  commitR1ReductionToHost();
+  commitR1ReductionToHost(OnlyNodesToReduce, GraphDevice, 
+                          DependentSolutionsContainer, Sol);
 
-  DependentSolutionsContainer.addBounedSelections(Sol);
   return true;
 }
 
@@ -719,7 +783,10 @@ struct GraphChangeChecker final : public GPUSolver::Pass {
     if (!ResPtr)
       utils::reportFatalError("Invalid loop state");
     auto &Metadata = ResPtr->getMetadata();
+    DEBUG_EXPR(std::cout << "\n---------------------\n");
+    DEBUG_EXPR(std::cout << "Graph has changed: " << Metadata.isGraphChanged() << "\n");
     ResPtr->setCondition(Metadata.isGraphChanged());
+    Metadata.graphHasBeenChanged(false);
     return PrevResult;
   }
 };
@@ -734,7 +801,7 @@ HeuristicSolver::R0Reduction::run(const Graph &Graph,
   bool Changed = performR0Reduction(Metadata.getDeviceGraph(), Graph,
                                     Metadata.getSolution(), BlockSize) ||
                  Metadata.isGraphChanged();
-  ResPtr->setCondition(Changed);
+  Metadata.graphHasBeenChanged(Changed);
   return PrevResult;
 }
 
@@ -749,7 +816,7 @@ HeuristicSolver::R1Reduction::run(const Graph &Graph,
                                     Metadata.getSolution(), BlockSize,
                                     ThreadsPerReduction) ||
                  Metadata.isGraphChanged();
-  ResPtr->setCondition(Changed);
+  Metadata.graphHasBeenChanged(Changed);
   return PrevResult;
 }
 

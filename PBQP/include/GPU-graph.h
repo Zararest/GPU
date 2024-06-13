@@ -94,8 +94,9 @@ public:
     assert(NodeIdx < HostAdjMatrix.h());
     assert(NeighbIdx < HostAdjMatrix.w());
     auto CostIdx = HostAdjMatrix[NodeIdx][NeighbIdx];
-    HostAdjMatrix[NodeIdx][NeighbIdx] = -1;
-    UnreachableCosts.push_back(CostIdx);
+    HostAdjMatrix[NodeIdx][NeighbIdx] = NoEdge;
+    if (CostIdx != NoEdge)
+      UnreachableCosts.push_back(CostIdx);
   }
 
   // Returns host node by device node, if it still in graph
