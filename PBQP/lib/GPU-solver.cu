@@ -491,6 +491,122 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   NodesToReduce[GlobalId] = CurNodesToReduce;
 }
 
+
+__global__ void __getNumOfNeighbours(device::Graph &Graph, 
+                                     unsigned *NumOfNeighbArr) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto GraphSize = AdjMatrix.h();
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (GlobalId >= GraphSize)
+    return;
+
+  auto NumOfNeighb = 0u;
+  for (unsigned i = 0; i < GraphSize; ++i) {
+    NumOfNeighb += AdjMatrix[i][GlobalId] != -1;
+    NumOfNeighb += AdjMatrix[GlobalId][i] != -1;
+  }
+
+  NumOfNeighbArr[GlobalId] = NumOfNeighb;
+}
+
+__device__ unsigned char __fillSelections(device::Graph &Graph,
+                                 unsigned NodeToReduce,
+                                 unsigned char *Selections,
+                                 unsigned *Neighbours,
+                                 unsigned NumOfNeighbours,
+                                 unsigned GlobalId) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto &NodeToReduceCostVector = 
+    Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
+  auto SelectionForCurNode = GlobalId % NodeToReduceCostVector.h();
+  GlobalId /= NodeToReduceCostVector.h();
+  for (unsigned i = 0; i < NumOfNeighbours; ++i) {
+    auto NodeIdx = Neighbours[i];
+    auto CostIdx = AdjMatrix[NodeIdx][NodeIdx];
+    auto &CostVect = Graph.getCostMatrix(CostIdx);
+    Selections[i] = GlobalId % CostVect.h();
+    GlobalId /= CostVect.h();
+  }
+  return SelectionForCurNode;
+}
+
+__device__ Graph::Cost_t __getCost(device::Graph &Graph, unsigned NodeToReduce,
+                                   unsigned NodeToReduceSelection,
+                                   unsigned Neighbour, 
+                                   unsigned NeighbourSelection) {
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  constexpr auto NoEdge = -1;
+  auto FirstPossibleIdx = AdjMatrix[NodeToReduce][Neighbour];
+  auto SecondPossibleIdx = AdjMatrix[Neighbour][NodeToReduce];
+  assert(FirstPossibleIdx != NoEdge ||
+         SecondPossibleIdx != NoEdge);
+  if (FirstPossibleIdx != NoEdge)
+    return Graph.getCostMatrix(FirstPossibleIdx)[NodeToReduceSelection][NeighbourSelection];
+  return Graph.getCostMatrix(SecondPossibleIdx)[NeighbourSelection][NodeToReduceSelection];
+}
+
+__global__ void __calcCostsForRN(device::Graph &Graph,
+                                 unsigned NodeToReduce,
+                                 unsigned *Neighbours,
+                                 unsigned NumOfNeighbours,
+                                 Graph::Cost_t *Costs,
+                                 unsigned NumOfCombinations) {
+  unsigned char SelectionsForNeighbours[NumOfNeighbours];
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (GlobalId >= NumOfCombinations)
+    return;
+
+  auto SelectionForCurNode = 
+    __fillSelections(Graph, NodeToReduce, SelectionsForNeighbours, 
+                     Neighbours, NumOfNeighbours, GlobalId);
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto &NodeToReduceCostVec = 
+    Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
+  auto Cost = NodeToReduceCostVec[SelectionForCurNode][0];
+  for (unsigned i = 0; i < NumOfNeighbours; ++i) {
+    auto Selection = SelectionsForNeighbours[i];
+    auto Neighbour = Neighbours[i];
+    Cost += __getCost(Graph, NodeToReduce, SelectionForCurNode, 
+                      Neighbour, Selection);
+    auto NeighbourCostIdx = AdjMatrix[Neighbour][Neighbour];
+    Cost += Graph.getCostMatrix(NeighbourCostIdx)[Selection][0];
+  }
+
+  Costs[GlobalId] = Cost;
+}
+
+__global__ void __commitRNReduction(device::Graph &Graph, 
+                                    unsigned NodeToReduce,
+                                    unsigned SelectionForReducedNode,
+                                    unsigned *Neighbours,
+                                    unsigned NumOfNeighbours) {
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  auto &AdjMatrix = Graph.getAdjMatrix();
+  auto NodeToReduceCostIdx = AdjMatrix[NodeToReduce][NodeToReduce];
+  constexpr auto NoNode = -1;
+
+  if (GlobalId == 0)
+    AdjMatrix[NodeToReduce][NodeToReduce] = NoNode;
+
+  if (GlobalId >= NumOfNeighbours)
+    return;
+
+  auto Neighbour = Neighbours[GlobalId];
+  auto NeighbourCostIdx = AdjMatrix[Neighbour][Neighbour];
+  auto &NeighbourCostVect = Graph.getCostMatrix(NeighbourCostIdx);
+  auto ReducedNodeCost = 
+    Graph.getCostMatrix(NodeToReduceCostIdx)[SelectionForReducedNode][0];
+  for (unsigned i = 0; i < NeighbourCostVect.h(); ++i)
+        NeighbourCostVect[i][0] += __getCost(Graph, NodeToReduce, 
+                                          SelectionForReducedNode,
+                                          Neighbour, i) + ReducedNodeCost;
+  
+  AdjMatrix[NodeToReduce][Neighbour] = NoNode;
+  AdjMatrix[Neighbour][NodeToReduce] = NoNode;
+}
+
 class DependentSolutionsForDevice final {
   struct DeviceDependentSolution final {
     // This is an selections to be taken on Dependent node
@@ -642,6 +758,113 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
   commitR1ReductionToHost(HostOnlyNodesToReduce, GraphDevice, 
                           DependentSolutionsContainer, Sol);
 
+  return true;
+}
+
+unsigned getNodeWithMostNeighbNum(device::Graph &GraphDevice, unsigned BlockSize) {
+  auto NumOfNodes = GraphDevice.size();
+
+  auto NumOfNeighb = thrust::device_vector<unsigned>(NumOfNodes, 0);
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(NumOfNodes, ThrBlockDim.x)};
+  __getNumOfNeighbours<<<BlockGridDim, ThrBlockDim>>>(GraphDevice, 
+    thrust::raw_pointer_cast(NumOfNeighb.data()));
+  
+  auto MaxElemIt = thrust::max_element(NumOfNeighb.begin(), NumOfNeighb.end());
+  return std::distance(NumOfNeighb.begin(), MaxElemIt);
+}
+
+thrust::host_vector<unsigned> getNeighbours(device::Graph &GraphDevice, 
+                                            unsigned NodeWithMaxNumOfNeighb) {
+  auto Res = thrust::host_vector<unsigned>{};
+  auto NumOfNodes = GraphDevice.size();
+  auto &AdjMatrix = GraphDevice.getAdjMatrix();
+  constexpr auto NoEdge = -1;
+
+  for (size_t i = 0; i < NumOfNodes; ++i) {
+    if (i != NodeWithMaxNumOfNeighb && 
+        (AdjMatrix[i][NodeWithMaxNumOfNeighb] != NoEdge ||
+         AdjMatrix[NodeWithMaxNumOfNeighb][i] != NoEdge))
+      Res.push_back(i);
+  }
+  return Res;
+}
+
+size_t getNumOfCombinations(const thrust::host_vector<unsigned> &Neighbours,
+                            unsigned NodeToReduce, device::Graph &GraphDevice) {
+  auto NumOfCombinations = GraphDevice.getNodeCostSize(NodeToReduce);
+  for (auto Neighb : Neighbours)
+    NumOfCombinations *= GraphDevice.getNodeCostSize(Neighb);
+  return NumOfCombinations;
+}
+
+unsigned getSelectionsByIdx(const thrust::host_vector<unsigned> &Neighbours,
+                   unsigned NodeToReduce, device::Graph &GraphDevice,
+                   size_t SolutionId) {
+  auto SelectionForNodeToReduce = 
+    SolutionId % GraphDevice.getNodeCostSize(NodeToReduce);
+  return SelectionForNodeToReduce;
+}
+
+void commitRNReductionToDevice(device::Graph &GraphDevice, unsigned NodeToReduce, 
+                               unsigned SelectionForReducedNode,
+                               thrust::device_vector<unsigned> Neighbours,
+                               unsigned BlockSize) {
+  dim3 ThrBlockDim{BlockSize};
+  // +1 is needed for the case when there is no neighbours
+  dim3 BlockGridDim{utils::ceilDiv(Neighbours.size() + 1, ThrBlockDim.x)};
+  __commitRNReduction<<<BlockGridDim, ThrBlockDim>>>(GraphDevice, 
+                      NodeToReduce, SelectionForReducedNode, 
+                      thrust::raw_pointer_cast(Neighbours.data()),
+                      Neighbours.size());
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
+}
+
+void commitRNReductionToHost(device::Graph &GraphDevice, unsigned NodeToReduce, 
+                               unsigned SelectionForReducedNode,
+                               const thrust::host_vector<unsigned> &Neighbours,
+                               Solution &Sol) {
+  //Sol.add
+}
+
+bool performRNReduction(device::Graph &GraphDevice, const Graph &Graph,
+                       Solution &Sol, unsigned BlockSize) {
+  if (GraphDevice.size() == 0)
+    return false;
+  
+  auto NodeToReduce = getNodeWithMostNeighbNum(GraphDevice, BlockSize);
+  // This means that graph is empty but not cleaned up
+  if (!GraphDevice.hasNode(NodeToReduce))
+    return false;
+
+  auto Neighbours = getNeighbours(GraphDevice, NodeToReduce);
+  auto NumOfCombinations = 
+    getNumOfCombinations(Neighbours, NodeToReduce, GraphDevice);
+  auto NeighboursDevice =
+    thrust::device_vector<unsigned>(Neighbours);
+  auto Costs = 
+    thrust::device_vector<Graph::Cost_t>(NumOfCombinations);
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{utils::ceilDiv(NumOfCombinations, ThrBlockDim.x)};
+  __calcCostsForRN<<<BlockGridDim, ThrBlockDim>>>(
+    GraphDevice, NodeToReduce, 
+    thrust::raw_pointer_cast(NeighboursDevice.data()), 
+    NeighboursDevice.size(), 
+    thrust::raw_pointer_cast(Costs.data()),
+    NumOfCombinations);
+  cudaDeviceSynchronize();
+  utils::checkKernelsExec();
+
+  auto MinSolutionIt = thrust::min_element(Costs.begin(), Costs.end());
+  assert(MinSolutionIt != Costs.end());
+  auto MinSolutionIdx = std::distance(Costs.begin(), MinSolutionIt);
+  auto SelectionForReducedNode = MinSolutionIdx % GraphDevice.getNodeCostSize(NodeToReduce);
+  
+  commitRNReductionToDevice(GraphDevice, NodeToReduce, SelectionForReducedNode,
+                            Neighbours, BlockSize);
+  commitRNReductionToHost(GraphDevice, NodeToReduce, SelectionForReducedNode,
+                          Neighbours, Sol);
   return true;
 }
 
@@ -849,6 +1072,20 @@ ReductionsSolver::R1Reduction::run(const Graph &Graph,
   bool Changed = performR1Reduction(Metadata.getDeviceGraph(), Graph,
                                     Metadata.getSolution(), BlockSize,
                                     ThreadsPerReduction) ||
+                 Metadata.isGraphChanged();
+  Metadata.graphHasBeenChanged(Changed);
+  return PrevResult;
+}
+
+GPUSolver::Res_t
+ReductionsSolver::RNReduction::run(const Graph &Graph,
+                                  GPUSolver::Res_t PrevResult) {
+  auto *ResPtr = dynamic_cast<LoopState<GPUGraphData> *>(PrevResult.get());
+  if (!ResPtr)
+    utils::reportFatalError("Invalid loop state in RN reduction");
+  auto &Metadata = ResPtr->getMetadata();
+  bool Changed = performRNReduction(Metadata.getDeviceGraph(), Graph,
+                                    Metadata.getSolution(), BlockSize) ||
                  Metadata.isGraphChanged();
   Metadata.graphHasBeenChanged(Changed);
   return PrevResult;

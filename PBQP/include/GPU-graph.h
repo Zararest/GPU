@@ -114,6 +114,11 @@ public:
     return std::nullopt;
   }
 
+  __host__ bool hasNode(size_t NodeIdx) const {
+    assert(NodeIdx < HostAdjMatrix.h());
+    return HostAdjMatrix[NodeIdx][NodeIdx] != NoEdge;
+  }
+
   __host__ void removeUnreachableNodes();
 
   __host__ void printAdjMatrix(std::ostream &S) const {

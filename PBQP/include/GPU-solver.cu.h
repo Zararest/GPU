@@ -139,9 +139,15 @@ class ReductionsSolver final : public GPUSolver {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
+  struct RNReduction final : public GPUSolver::Pass {
+    static constexpr size_t BlockSize = 16;
+    
+    Res_t run(const Graph &Graph, Res_t PrevResult) override;
+  };
+
   struct FinalFullSearch final : public GPUSolver::Pass {
     static constexpr size_t BlockSize = 32;
-
+    // FIXME: Not fully implemented
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
