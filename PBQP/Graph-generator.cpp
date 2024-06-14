@@ -2,6 +2,10 @@
 
 #include <fstream>
 
+size_t countEdges(PBQP::Graph &Graph) {
+  return std::distance(Graph.edgesBeg(), Graph.edgesEnd());
+}
+
 int main(int Argc, char **Argv) {
   auto CLPars = utils::CLParser{Argc, Argv};
   CLPars.addOption("nodes-num", utils::CLOption::Type::String);
@@ -29,6 +33,7 @@ int main(int Argc, char **Argv) {
     OutFileName = CLPars.getOption("out-file");
 
   auto Graph = PBQP::generateGraph(Cfg);
+  std::cout << "Number of edges: " << countEdges(Graph) << "\n";
   auto GraphOS = std::ofstream{OutFileName};
   Graph.dump(GraphOS);
   assert(Graph.validate());

@@ -9,7 +9,7 @@
 #include <set>
 #include <vector>
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) expr
@@ -175,6 +175,10 @@ public:
 
 template <typename T> size_t to_milliseconds(const T &Clck) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(Clck).count();
+}
+
+template <typename T> size_t to_microseconds(const T &Clck) {
+  return std::chrono::duration_cast<std::chrono::microseconds>(Clck).count();
 }
 
 bool isEqual(double Lhs, double Rhs);

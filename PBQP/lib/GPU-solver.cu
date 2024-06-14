@@ -682,7 +682,7 @@ GPUSolver::Res_t GPUSolver::PassManager::runPass(Pass_t &Pass, Res_t PrevRes,
   auto Start = std::chrono::steady_clock::now();
   auto Res = Pass->run(Graph, std::move(PrevRes));
   auto End = std::chrono::steady_clock::now();
-  PassPtrToDuration[Pass.get()] += utils::to_milliseconds(End - Start);
+  PassPtrToDuration[Pass.get()] += utils::to_microseconds(End - Start);
   return Res;
 }
 
@@ -883,13 +883,10 @@ ReductionsSolver::CleanUpPass::run(const Graph &Graph,
 void ReductionsSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass});
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
-    PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new R0Reduction});
     PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new CleanUpPass});
-    PM.addPass(Pass_t{new R0Reduction});
-    PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
   PM.addPass(Pass_t{new FinalFullSearch});

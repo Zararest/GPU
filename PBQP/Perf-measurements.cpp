@@ -34,7 +34,7 @@ size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   auto SolutionOS = std::ofstream(AnsFileName + "-GPU.dot");
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_milliseconds(End - Start);
+  return utils::to_microseconds(End - Start);
 }
 
 size_t measureCPU(const std::string &InFileName,
@@ -52,7 +52,7 @@ size_t measureCPU(const std::string &InFileName,
   auto SolutionOS = std::ofstream(AnsFileName + "-CPU.dot");
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_milliseconds(End - Start);
+  return utils::to_microseconds(End - Start);
 }
 
 void checkSolution(const std::string &InFileName) {
@@ -91,7 +91,7 @@ size_t measureReductions(const std::string &InFileName,
   auto SolutionOS = std::ofstream{AnsFileName + "-reductions.dot"};
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_milliseconds(End - Start);
+  return utils::to_microseconds(End - Start);
 }
 
 int main(int Argc, char **Argv) {
@@ -133,21 +133,21 @@ int main(int Argc, char **Argv) {
     auto Time = measureGPU(InFileName, OutFileName, OnlyTime);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "GPU time: " + std::to_string(Time) + "ms\n";
+      OutString = "GPU time: " + std::to_string(Time) + "us\n";
   }
 
   if (UseCPU) {
     auto Time = measureCPU(InFileName, OutFileName);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "CPU time: " + std::to_string(Time) + "ms\n";
+      OutString = "CPU time: " + std::to_string(Time) + "us\n";
   }
 
   if (UseHeuristic) {
     auto Time = measureReductions(InFileName, OutFileName);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "Reductions on GPU time: " + std::to_string(Time) + "ms\n";
+      OutString = "Reductions on GPU time: " + std::to_string(Time) + "us\n";
   }
 
   std::cout << OutString << std::endl;
