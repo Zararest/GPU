@@ -80,7 +80,10 @@ __host__ size_t Graph::getNumOfCostCombinations() const {
 
 __host__ void Graph::removeUnreachableCosts() {
   for (auto Unreachable : UnreachableCosts) {
-    CostMatrices[Unreachable].free();
+    DEBUG_EXPR(std::cout << "Removing unreachable: " << 
+               Unreachable << "\n");
+    // FIXME with this cleanup pass is not working
+    //CostMatrices[Unreachable].free();
     CostMatrices[Unreachable] = device::Matrix<Cost_t>{};
   }
   UnreachableCosts.clear();
@@ -124,6 +127,14 @@ __host__ void Graph::removeUnreachableNodes() {
 
   AdjMatrix.free();
   AdjMatrix = device::Matrix<Index_t>{HostAdjMatrix};
+  assert(checkAdjMatricesCoherence());
+}
+
+__host__ bool Graph::checkAdjMatricesCoherence() const {
+  auto CurDeviceAdjMatrix = AdjMatrix.getHostMatrix();
+  return checkHostMatrix() &&
+         std::equal(CurDeviceAdjMatrix.begin(), CurDeviceAdjMatrix.end(),
+                    HostAdjMatrix.begin(), HostAdjMatrix.end());
 }
 
 } // namespace device

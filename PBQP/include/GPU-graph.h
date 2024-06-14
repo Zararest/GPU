@@ -90,6 +90,14 @@ public:
     return HostAdjMatrix.h();
   }
 
+  __host__ bool checkHostMatrix() const {
+    return std::distance(HostAdjMatrix.begin(), HostAdjMatrix.end()) == 
+           HostAdjMatrix.w() * HostAdjMatrix.h() && 
+           HostAdjMatrix.w() == HostAdjMatrix.h();
+  }
+
+  __host__ bool checkAdjMatricesCoherence() const;
+
   __host__ void makeCostUnreachable(size_t NodeIdx, size_t NeighbIdx) {
     assert(NodeIdx < HostAdjMatrix.h());
     assert(NeighbIdx < HostAdjMatrix.w());

@@ -281,6 +281,7 @@ void commitR0ReductionToHost(thrust::host_vector<int> SelectionForNodes,
       GraphDevice.makeCostUnreachable(NodeIdx, NodeIdx);
     }
   }
+  assert(GraphDevice.checkAdjMatricesCoherence());
 }
 
 bool performR0Reduction(device::Graph &GraphDevice, const Graph &Graph,
@@ -404,6 +405,7 @@ __device__ void __performR1Reduction(device::Graph &Graph,
                                      unsigned *DependentSolutions,
                                      unsigned ThreadIdInReduction,
                                      unsigned ThreadsPerReduction) {
+  
   auto Single = Nodes.getSingleNode();
   auto Neighb = Nodes.getNeighbour();
   auto [PosY, PosX] = Nodes.getPosOfCostMatix();
@@ -431,6 +433,7 @@ __device__ void __performR1Reduction(device::Graph &Graph,
   if (ThreadIdInReduction == 0) {
     constexpr auto NoNode = -1;
     AdjMatrix[PosY][PosX] = NoNode;
+    AdjMatrix[PosX][PosY] = NoNode;
     AdjMatrix[Single][Single] = NoNode;
   }
 }
@@ -449,15 +452,6 @@ __global__ void __R1Reduction(device::Graph Graph,
     __performR1Reduction(Graph, NodesToReduce[ReductionId],
                          DependentSolutions[ReductionId], ThreadIdInReduction,
                          ThreadsPerReduction);
-  return;
-  if (GlobalId == 0) {
-    printf("Selections on device:\n");
-    for (int j = 0; j < NumberOfReductions; j++) {
-      for (int i = 0; i < 13; i++)
-        printf("%i ", DependentSolutions[j][i]);
-      printf("\n");
-    }
-  }
 }
 
 __global__ void __getNodesToReduceR1(device::Graph Graph,
@@ -514,9 +508,11 @@ public:
   DependentSolutionsForDevice(
       device::Graph &GraphDevice, const Graph &Graph,
       const thrust::host_vector<NodesToReduceR1> &AllNodesToReduce) {
+    assert(GraphDevice.checkAdjMatricesCoherence());
     DEBUG_EXPR(std::cout << "Current graph:\n");
     DEBUG_EXPR(GraphDevice.printAdjMatrix(std::cout));
     DEBUG_EXPR(std::cout << "Nodes to reduce R1:\n");
+
     for (auto &NodesToReduce : AllNodesToReduce) {
       auto DefiningNodeDeviceIdx = NodesToReduce.getNeighbour();
       auto DefiningNodeHostIdx = GraphDevice.getHostNode(DefiningNodeDeviceIdx);
@@ -526,6 +522,7 @@ public:
                   << NodesToReduce.getNeighbour() << " -- ...\n");
       if (!DefiningNodeHostIdx || !DependentHostIdx)
         utils::reportFatalError("Node has already been reduced");
+      
       auto DefiningSolutionsSize = Graph.getNodesCostSize(*DefiningNodeHostIdx);
       auto NewSolution = DeviceDependentSolution{
           thrust::device_vector<unsigned>(DefiningSolutionsSize),
@@ -611,6 +608,7 @@ void commitR1ReductionToHost(thrust::host_vector<NodesToReduceR1> ReducedNodes,
     GraphDevice.makeCostUnreachable(NodeToRemove, Neighb);
     GraphDevice.makeCostUnreachable(NodeToRemove, NodeToRemove);
   }
+  assert(GraphDevice.checkAdjMatricesCoherence());
 }
 
 bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
@@ -625,7 +623,9 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
     return false;
 
   auto HostOnlyNodesToReduce =
-      thrust::host_vector<NodesToReduceR1>(OnlyNodesToReduce);
+      thrust::host_vector<NodesToReduceR1>(OnlyNodesToReduce.size());
+  thrust::copy(OnlyNodesToReduce.begin(), OnlyNodesToReduce.end(), 
+               HostOnlyNodesToReduce.begin());
   auto DependentSolutionsContainer = DependentSolutionsForDevice(
       GraphDevice, Graph, HostOnlyNodesToReduce);
   auto NumOfThreads = OnlyNodesToReduce.size() * ThreadsPerReduction;
@@ -874,6 +874,8 @@ ReductionsSolver::CleanUpPass::run(const Graph &Graph,
   if (!ResPtr)
     utils::reportFatalError("Invalid loop state in clean up");
   auto &Metadata = ResPtr->getMetadata();
+  DEBUG_EXPR(std::cout << "\n---------------------\n");
+  DEBUG_EXPR(std::cout << "Cleanup pass\n");
   Metadata.getDeviceGraph().removeUnreachableNodes();
   return PrevResult;
 }
@@ -883,7 +885,11 @@ void ReductionsSolver::addPasses(PassManager &PM) {
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
     PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new R1Reduction});
+    PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new CleanUpPass});
+    PM.addPass(Pass_t{new R0Reduction});
+    PM.addPass(Pass_t{new R1Reduction});
     PM.addPass(Pass_t{new GraphChangeChecker});
   PM.addLoopEnd();
   PM.addPass(Pass_t{new FinalFullSearch});
