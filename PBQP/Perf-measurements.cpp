@@ -10,12 +10,17 @@ void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
   std::transform(ProfileInfo.begin(), ProfileInfo.end(),
                  std::ostream_iterator<std::string>(std::cout, "\n\t"),
                  [](auto &Profile) {
-                   return Profile.first + ": " + std::to_string(Profile.second);
+                   if (Profile.first.find("Loop header") != std::string::npos)
+                     return Profile.first + ": " + std::to_string(Profile.second);
+                   if (Profile.first.find("Loop end") != std::string::npos)
+                     return Profile.first + "\n";
+                   auto Duration = utils::to_milliseconds_fractional(Profile.second);
+                   return Profile.first + ": " + std::to_string(Duration) + "ms";
                  });
   std::cout << std::endl;
 }
 
-size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
+double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
                   bool OnlyTime) {
   auto IS = std::ifstream{InFileName};
   auto Graph = PBQP::Graph{};
@@ -34,10 +39,10 @@ size_t measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   auto SolutionOS = std::ofstream(AnsFileName + "-GPU.dot");
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_microseconds(End - Start);
+  return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
 }
 
-size_t measureCPU(const std::string &InFileName,
+double measureCPU(const std::string &InFileName,
                   const std::string &AnsFileName) {
   auto IS = std::ifstream{InFileName};
   auto Graph = PBQP::Graph{};
@@ -52,7 +57,7 @@ size_t measureCPU(const std::string &InFileName,
   auto SolutionOS = std::ofstream(AnsFileName + "-CPU.dot");
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_microseconds(End - Start);
+  return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
 }
 
 void checkSolution(const std::string &InFileName) {
@@ -72,7 +77,7 @@ void checkSolution(const std::string &InFileName) {
                             std::to_string(GPUAns.getFinalCost()) + "]");
 }
 
-size_t measureReductions(const std::string &InFileName,
+double measureReductions(const std::string &InFileName,
                   const std::string &AnsFileName) {
   auto IS = std::ifstream{InFileName};
   auto Graph = PBQP::Graph{};
@@ -91,7 +96,7 @@ size_t measureReductions(const std::string &InFileName,
   auto SolutionOS = std::ofstream{AnsFileName + "-reductions.dot"};
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_microseconds(End - Start);
+  return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
 }
 
 int main(int Argc, char **Argv) {
@@ -133,21 +138,21 @@ int main(int Argc, char **Argv) {
     auto Time = measureGPU(InFileName, OutFileName, OnlyTime);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "GPU time: " + std::to_string(Time) + "us\n";
+      OutString = "GPU time: " + std::to_string(Time) + "ms\n";
   }
 
   if (UseCPU) {
     auto Time = measureCPU(InFileName, OutFileName);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "CPU time: " + std::to_string(Time) + "us\n";
+      OutString = "CPU time: " + std::to_string(Time) + "ms\n";
   }
 
   if (UseHeuristic) {
     auto Time = measureReductions(InFileName, OutFileName);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
-      OutString = "Reductions on GPU time: " + std::to_string(Time) + "us\n";
+      OutString = "Reductions on GPU time: " + std::to_string(Time) + "ms\n";
   }
 
   std::cout << OutString << std::endl;

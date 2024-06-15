@@ -145,8 +145,7 @@ Graph generateClique(size_t NumOfNodes, size_t VectSize, double AvgNeighbNum,
 } // anonymous namespace
 
 Graph generateGraph(GenConfig Cfg) {
-  std::random_device Rd;
-  std::mt19937 Gen(Rd());
+  std::mt19937 Gen(42);
   auto CliqueSizesBounds = std::vector<size_t>{};
   // Last bound is NumOfNodes
   std::generate_n(std::back_inserter(CliqueSizesBounds), Cfg.NumOfCliques - 1,

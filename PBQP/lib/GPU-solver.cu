@@ -18,6 +18,7 @@ __device__ void __fillChoices(device::Graph &Graph, unsigned char *Choices,
                               unsigned GlobalId) {
   // We assume that task with node size more than 255 is too hard
   constexpr auto MaxNodeSize = 255;
+  (void)MaxNodeSize;
   auto NumOfNodes = Graph.getAdjMatrix().h();
   auto &AdjMatrix = Graph.getAdjMatrix();
   for (unsigned NodeIdx = 0; NodeIdx < NumOfNodes; ++NodeIdx) {
@@ -192,11 +193,15 @@ public:
 };
 
 struct LoopConditionHandler final : public GPUSolver::Condition {
+  bool IsFirstIteration = true;
+  
   bool check(GPUSolver::Pass::Res_t &PrevResult) override {
     auto *ResPtr = dynamic_cast<LoopCondition *>(PrevResult.get());
     if (!ResPtr)
       utils::reportFatalError("Loop header accepts only LoopCondition class");
-    return ResPtr->getCondition();
+    auto CutItIsFirst = IsFirstIteration;
+    IsFirstIteration = false;
+    return ResPtr->getCondition() || CutItIsFirst;
   }
 };
 
@@ -492,7 +497,7 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
 }
 
 
-__global__ void __getNumOfNeighbours(device::Graph &Graph, 
+__global__ void __getNumOfNeighbours(device::Graph Graph, 
                                      unsigned *NumOfNeighbArr) {
   auto &AdjMatrix = Graph.getAdjMatrix();
   auto GraphSize = AdjMatrix.h();
@@ -510,27 +515,6 @@ __global__ void __getNumOfNeighbours(device::Graph &Graph,
   NumOfNeighbArr[GlobalId] = NumOfNeighb;
 }
 
-__device__ unsigned char __fillSelections(device::Graph &Graph,
-                                 unsigned NodeToReduce,
-                                 unsigned char *Selections,
-                                 unsigned *Neighbours,
-                                 unsigned NumOfNeighbours,
-                                 unsigned GlobalId) {
-  auto &AdjMatrix = Graph.getAdjMatrix();
-  auto &NodeToReduceCostVector = 
-    Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
-  auto SelectionForCurNode = GlobalId % NodeToReduceCostVector.h();
-  GlobalId /= NodeToReduceCostVector.h();
-  for (unsigned i = 0; i < NumOfNeighbours; ++i) {
-    auto NodeIdx = Neighbours[i];
-    auto CostIdx = AdjMatrix[NodeIdx][NodeIdx];
-    auto &CostVect = Graph.getCostMatrix(CostIdx);
-    Selections[i] = GlobalId % CostVect.h();
-    GlobalId /= CostVect.h();
-  }
-  return SelectionForCurNode;
-}
-
 __device__ Graph::Cost_t __getCost(device::Graph &Graph, unsigned NodeToReduce,
                                    unsigned NodeToReduceSelection,
                                    unsigned Neighbour, 
@@ -546,38 +530,39 @@ __device__ Graph::Cost_t __getCost(device::Graph &Graph, unsigned NodeToReduce,
   return Graph.getCostMatrix(SecondPossibleIdx)[NeighbourSelection][NodeToReduceSelection];
 }
 
-__global__ void __calcCostsForRN(device::Graph &Graph,
+__global__ void __calcCostsForRN(device::Graph Graph,
                                  unsigned NodeToReduce,
                                  unsigned *Neighbours,
                                  unsigned NumOfNeighbours,
                                  Graph::Cost_t *Costs,
                                  unsigned NumOfCombinations) {
-  unsigned char SelectionsForNeighbours[NumOfNeighbours];
   auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
-
   if (GlobalId >= NumOfCombinations)
     return;
 
-  auto SelectionForCurNode = 
-    __fillSelections(Graph, NodeToReduce, SelectionsForNeighbours, 
-                     Neighbours, NumOfNeighbours, GlobalId);
   auto &AdjMatrix = Graph.getAdjMatrix();
   auto &NodeToReduceCostVec = 
     Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
+  auto SelectionForCurNode = GlobalId % NodeToReduceCostVec.h();
+  GlobalId /= NodeToReduceCostVec.h();
   auto Cost = NodeToReduceCostVec[SelectionForCurNode][0];
+  
   for (unsigned i = 0; i < NumOfNeighbours; ++i) {
-    auto Selection = SelectionsForNeighbours[i];
     auto Neighbour = Neighbours[i];
+    auto &NeighbCostVec = 
+      Graph.getCostMatrix(AdjMatrix[Neighbour][Neighbour]);
+    auto Selection = GlobalId % NeighbCostVec.h();
+    GlobalId /= NeighbCostVec.h();
+    
     Cost += __getCost(Graph, NodeToReduce, SelectionForCurNode, 
                       Neighbour, Selection);
-    auto NeighbourCostIdx = AdjMatrix[Neighbour][Neighbour];
-    Cost += Graph.getCostMatrix(NeighbourCostIdx)[Selection][0];
+    Cost += NeighbCostVec[Selection][0];
   }
 
   Costs[GlobalId] = Cost;
 }
 
-__global__ void __commitRNReduction(device::Graph &Graph, 
+__global__ void __commitRNReduction(device::Graph Graph, 
                                     unsigned NodeToReduce,
                                     unsigned SelectionForReducedNode,
                                     unsigned *Neighbours,
@@ -774,36 +759,12 @@ unsigned getNodeWithMostNeighbNum(device::Graph &GraphDevice, unsigned BlockSize
   return std::distance(NumOfNeighb.begin(), MaxElemIt);
 }
 
-thrust::host_vector<unsigned> getNeighbours(device::Graph &GraphDevice, 
-                                            unsigned NodeWithMaxNumOfNeighb) {
-  auto Res = thrust::host_vector<unsigned>{};
-  auto NumOfNodes = GraphDevice.size();
-  auto &AdjMatrix = GraphDevice.getAdjMatrix();
-  constexpr auto NoEdge = -1;
-
-  for (size_t i = 0; i < NumOfNodes; ++i) {
-    if (i != NodeWithMaxNumOfNeighb && 
-        (AdjMatrix[i][NodeWithMaxNumOfNeighb] != NoEdge ||
-         AdjMatrix[NodeWithMaxNumOfNeighb][i] != NoEdge))
-      Res.push_back(i);
-  }
-  return Res;
-}
-
 size_t getNumOfCombinations(const thrust::host_vector<unsigned> &Neighbours,
                             unsigned NodeToReduce, device::Graph &GraphDevice) {
   auto NumOfCombinations = GraphDevice.getNodeCostSize(NodeToReduce);
   for (auto Neighb : Neighbours)
     NumOfCombinations *= GraphDevice.getNodeCostSize(Neighb);
   return NumOfCombinations;
-}
-
-unsigned getSelectionsByIdx(const thrust::host_vector<unsigned> &Neighbours,
-                   unsigned NodeToReduce, device::Graph &GraphDevice,
-                   size_t SolutionId) {
-  auto SelectionForNodeToReduce = 
-    SolutionId % GraphDevice.getNodeCostSize(NodeToReduce);
-  return SelectionForNodeToReduce;
 }
 
 void commitRNReductionToDevice(device::Graph &GraphDevice, unsigned NodeToReduce, 
@@ -825,24 +786,38 @@ void commitRNReductionToHost(device::Graph &GraphDevice, unsigned NodeToReduce,
                                unsigned SelectionForReducedNode,
                                const thrust::host_vector<unsigned> &Neighbours,
                                Solution &Sol) {
-  //Sol.add
+  auto HostIdxOpt = GraphDevice.getHostNode(NodeToReduce);
+  assert(HostIdxOpt);
+  Sol.addSelection(*HostIdxOpt, SelectionForReducedNode);
+  GraphDevice.makeCostUnreachable(NodeToReduce, NodeToReduce);
+  for (auto Neighb : Neighbours) {
+    GraphDevice.makeCostUnreachable(NodeToReduce, Neighb);
+    GraphDevice.makeCostUnreachable(Neighb, NodeToReduce);
+  }
 }
 
-bool performRNReduction(device::Graph &GraphDevice, const Graph &Graph,
-                       Solution &Sol, unsigned BlockSize) {
+bool performRNReduction(device::Graph &GraphDevice,
+                       Solution &Sol, unsigned BlockSize,
+                       size_t MaxNumOfCombinations) {
   if (GraphDevice.size() == 0)
     return false;
-  
+  DEBUG_EXPR(std::cout << "\n---------------------\n");
+  DEBUG_EXPR(std::cout << "Performing RN reduction\n");
+
   auto NodeToReduce = getNodeWithMostNeighbNum(GraphDevice, BlockSize);
+  DEBUG_EXPR(std::cout << "Node to reduce: " << NodeToReduce << "\n");
   // This means that graph is empty but not cleaned up
   if (!GraphDevice.hasNode(NodeToReduce))
     return false;
 
-  auto Neighbours = getNeighbours(GraphDevice, NodeToReduce);
+  auto Neighbours = GraphDevice.getNeighbours(NodeToReduce);
   auto NumOfCombinations = 
-    getNumOfCombinations(Neighbours, NodeToReduce, GraphDevice);
+    std::min(getNumOfCombinations(Neighbours, NodeToReduce, GraphDevice),
+             MaxNumOfCombinations);
   auto NeighboursDevice =
     thrust::device_vector<unsigned>(Neighbours);
+  DEBUG_EXPR(std::cout << "Allocating " << NumOfCombinations << 
+              " * " << sizeof(float) << " bytes for costs\n");
   auto Costs = 
     thrust::device_vector<Graph::Cost_t>(NumOfCombinations);
   dim3 ThrBlockDim{BlockSize};
@@ -868,9 +843,13 @@ bool performRNReduction(device::Graph &GraphDevice, const Graph &Graph,
   return true;
 }
 
-void performFullSearch(device::Graph &GraphDevice, const Graph &Graph,
-                       Solution &Sol, unsigned BlockSize) {
-
+void performFullSearch(device::Graph &GraphDevice,
+                       Solution &Sol, unsigned BlockSize,
+                       size_t MaxNumOfCombinations) {
+  DEBUG_EXPR(std::cout << "\n---------------------\n");
+  DEBUG_EXPR(std::cout << "Performing full search with RN reductions\n");
+  while (performRNReduction(GraphDevice, Sol, BlockSize, 
+                            MaxNumOfCombinations)) {}
 }
 
 } // anonymous namespace
@@ -882,6 +861,13 @@ void GPUSolver::PassManager::addPass(Pass_t Pass, std::string Name) {
     Name = "Pass " + std::to_string(PassPtrToName.size());
   PassPtrToName[Pass.get()] = Name;
   Stages.emplace_back(std::move(Pass));
+}
+
+void GPUSolver::PassManager::addHeaderMetadata(LoopHeader &Header) {
+  const auto *HeaderPtr = &Header;
+  if (LoopPtrToIterNum.find(HeaderPtr) == LoopPtrToIterNum.end())
+    LoopPtrToIterNum[HeaderPtr] = 0;
+  LoopPtrToIterNum[HeaderPtr]++;
 }
 
 void GPUSolver::PassManager::addLoopStart(Condition_t Cond) {
@@ -905,7 +891,10 @@ GPUSolver::Res_t GPUSolver::PassManager::runPass(Pass_t &Pass, Res_t PrevRes,
   auto Start = std::chrono::steady_clock::now();
   auto Res = Pass->run(Graph, std::move(PrevRes));
   auto End = std::chrono::steady_clock::now();
-  PassPtrToDuration[Pass.get()] += utils::to_microseconds(End - Start);
+  auto *PassPtr = Pass.get();
+  if (PassPtrToDuration.find(PassPtr) == PassPtrToDuration.end())
+    PassPtrToDuration[PassPtr] = 0;
+  PassPtrToDuration[PassPtr] += utils::to_microseconds(End - Start);
   return Res;
 }
 
@@ -928,16 +917,19 @@ Solution GPUSolver::PassManager::run(Graph Graph) {
       continue;
     }
     if (std::holds_alternative<LoopHeader>(CurStage)) {
+      auto &Header = std::get<LoopHeader>(CurStage);
       CurStageIdx =
-          getNextIdx(std::get<LoopHeader>(CurStage), Res, CurStageIdx);
+          getNextIdx(Header, Res, CurStageIdx);
       continue;
     }
     if (std::holds_alternative<LoopEnd>(CurStage)) {
       auto &HeaderIdx = std::get<LoopEnd>(CurStage).HeaderIdx;
       auto &Header = Stages[HeaderIdx];
       assert(std::holds_alternative<LoopHeader>(Header));
+      auto &HeaderObj = std::get<LoopHeader>(Header);
+      addHeaderMetadata(HeaderObj);
       // We've jumped to the header
-      CurStageIdx = getNextIdx(std::get<LoopHeader>(Header), Res, HeaderIdx);
+      CurStageIdx = getNextIdx(HeaderObj, Res, HeaderIdx);
       continue;
     }
   }
@@ -951,11 +943,16 @@ Solution GPUSolver::PassManager::run(Graph Graph) {
 
 GPUSolver::PassManager::Profile_t
 GPUSolver::PassManager::getProfileInfo() const {
-  auto Res = std::vector<std::pair<std::string, size_t>>{};
+  auto Res = Profile_t{};
   std::transform(Stages.begin(), Stages.end(), std::back_inserter(Res),
                  [&](const auto &Stage) {
-                   if (std::holds_alternative<LoopHeader>(Stage))
-                     return std::pair<std::string, size_t>{"Loop header", 0};
+                   if (std::holds_alternative<LoopHeader>(Stage)) {
+                     auto &Header = std::get<LoopHeader>(Stage);
+                     auto IterNumIt = LoopPtrToIterNum.find(&Header);
+                     assert(IterNumIt != LoopPtrToIterNum.end());
+                     return std::pair<std::string, size_t>{"Loop header iter num",
+                      IterNumIt->second};
+                   }
                    if (std::holds_alternative<LoopEnd>(Stage))
                      return std::pair<std::string, size_t>{"Loop end", 0};
                    auto PassPtr = std::get<Pass_t>(Stage).get();
@@ -1084,8 +1081,9 @@ ReductionsSolver::RNReduction::run(const Graph &Graph,
   if (!ResPtr)
     utils::reportFatalError("Invalid loop state in RN reduction");
   auto &Metadata = ResPtr->getMetadata();
-  bool Changed = performRNReduction(Metadata.getDeviceGraph(), Graph,
-                                    Metadata.getSolution(), BlockSize) ||
+  bool Changed = performRNReduction(Metadata.getDeviceGraph(),
+                                    Metadata.getSolution(), BlockSize,
+                                    MaxNumOfCombinations) ||
                  Metadata.isGraphChanged();
   Metadata.graphHasBeenChanged(Changed);
   return PrevResult;
@@ -1098,8 +1096,8 @@ ReductionsSolver::FinalFullSearch::run(const Graph &Graph,
   if (!ResPtr)
     utils::reportFatalError("Invalid loop state in full search");
   auto &Metadata = ResPtr->getMetadata();
-  performFullSearch(Metadata.getDeviceGraph(), Graph,
-                    Metadata.getSolution(), BlockSize);
+  performFullSearch(Metadata.getDeviceGraph(),
+                    Metadata.getSolution(), BlockSize, MaxNumOfCombinations);
   return Res_t{new GPUResult(std::move(Metadata.getDeviceGraph()), 
                              std::move(Metadata.getSolution()))};
 }
@@ -1118,16 +1116,30 @@ ReductionsSolver::CleanUpPass::run(const Graph &Graph,
 }
 
 void ReductionsSolver::addPasses(PassManager &PM) {
-  PM.addPass(Pass_t{new InitStatePass});
+  PM.addPass(Pass_t{new InitStatePass}, "Loader");
+  // Loop with only R0 and R1 reductions
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
-    PM.addPass(Pass_t{new R0Reduction});
-    PM.addPass(Pass_t{new R1Reduction});
-    PM.addPass(Pass_t{new R1Reduction});
-    PM.addPass(Pass_t{new CleanUpPass});
-    PM.addPass(Pass_t{new GraphChangeChecker});
+    PM.addPass(Pass_t{new R0Reduction}, "R0");
+    PM.addPass(Pass_t{new R1Reduction}, "R1");
+    PM.addPass(Pass_t{new R1Reduction}, "R1");
+    PM.addPass(Pass_t{new R0Reduction}, "R0");
+    PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+    PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
   PM.addLoopEnd();
-  PM.addPass(Pass_t{new FinalFullSearch});
-  PM.addPass(Pass_t{new GraphDeleter});
+  // Loop with RN reductions
+  PM.addLoopStart(Condition_t{new LoopConditionHandler});
+    PM.addPass(Pass_t{new RNReduction}, "RN");
+    PM.addPass(Pass_t{new R1Reduction}, "R1");
+    PM.addPass(Pass_t{new R0Reduction}, "R0");
+    PM.addPass(Pass_t{new R1Reduction}, "R1");
+    PM.addPass(Pass_t{new R1Reduction}, "R1");
+    PM.addPass(Pass_t{new R0Reduction}, "R0");
+    PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+    PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
+  PM.addLoopEnd();
+
+  PM.addPass(Pass_t{new FinalFullSearch}, "Final full search with RN");
+  PM.addPass(Pass_t{new GraphDeleter}, "Deleter");
 }
 
 } // namespace PBQP

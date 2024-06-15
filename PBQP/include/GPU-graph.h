@@ -2,6 +2,7 @@
 
 #include "PBQP.h"
 #include <unordered_map>
+#include <thrust/host_vector.h>
 
 namespace device {
 
@@ -124,6 +125,8 @@ public:
   __host__ void printAdjMatrix(std::ostream &S) const {
     utils::printMatrix(HostAdjMatrix, S);
   }
+
+  __host__ thrust::host_vector<unsigned> getNeighbours(unsigned NodeIdx);
 
   __device__ device::Matrix<Index_t> &getAdjMatrix() { return AdjMatrix; }
 

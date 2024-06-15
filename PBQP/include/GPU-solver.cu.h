@@ -47,11 +47,13 @@ struct GPUSolver : public Solver {
     std::vector<std::variant<Pass_t, LoopHeader, LoopEnd>> Stages;
     std::map<Pass *, size_t> PassPtrToDuration;
     std::map<Pass *, std::string> PassPtrToName;
+    std::map<const LoopHeader *, size_t> LoopPtrToIterNum;
     size_t NumOfIncompleteLoops = 0;
     std::vector<size_t> LoopHeaderIdxes;
 
     size_t getNextIdx(LoopHeader &Header, Res_t &Res, size_t CurIdx);
     Res_t runPass(Pass_t &Pass, Res_t PrevRes, Graph &Graph);
+    void addHeaderMetadata(LoopHeader &Header);
 
   public:
     using Profile_t = std::vector<std::pair<std::string, size_t>>;
@@ -124,7 +126,7 @@ class ReductionsSolver final : public GPUSolver {
   // Pass that performs R0 reduction on graph:
   //  finds nodes with degree 0 and selects best option
   struct R0Reduction final : public GPUSolver::Pass {
-    static constexpr size_t BlockSize = 32;
+    static constexpr auto BlockSize = 32ul;
 
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
@@ -133,21 +135,24 @@ class ReductionsSolver final : public GPUSolver {
   //  finds a node that has only one neighbor
   //  and moves all costs to the neighbor
   struct R1Reduction final : public GPUSolver::Pass {
-    static constexpr size_t BlockSize = 32;
-    static constexpr size_t ThreadsPerReduction = 8;
+    static constexpr auto BlockSize = 32ul;
+    static constexpr auto ThreadsPerReduction = 8ul;
 
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
   struct RNReduction final : public GPUSolver::Pass {
-    static constexpr size_t BlockSize = 16;
-    
+    static constexpr auto BlockSize = 16ul;
+    // Max number of combinations to be considered
+    static constexpr auto MaxNumOfCombinations = 8192ul;
+
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
   struct FinalFullSearch final : public GPUSolver::Pass {
-    static constexpr size_t BlockSize = 32;
-    // FIXME: Not fully implemented
+    static constexpr auto BlockSize = 32ul;
+    static constexpr auto MaxNumOfCombinations = 8192ul;
+
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 

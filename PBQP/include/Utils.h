@@ -181,6 +181,10 @@ template <typename T> size_t to_microseconds(const T &Clck) {
   return std::chrono::duration_cast<std::chrono::microseconds>(Clck).count();
 }
 
+inline double to_milliseconds_fractional(size_t Microseconds) {
+  return static_cast<double>(Microseconds) / 1000.0;
+}
+
 bool isEqual(double Lhs, double Rhs);
 
 } // namespace utils

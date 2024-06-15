@@ -83,7 +83,7 @@ __host__ void Graph::removeUnreachableCosts() {
     DEBUG_EXPR(std::cout << "Removing unreachable: " << 
                Unreachable << "\n");
     // FIXME with this cleanup pass is not working
-    //CostMatrices[Unreachable].free();
+    CostMatrices[Unreachable].free();
     CostMatrices[Unreachable] = device::Matrix<Cost_t>{};
   }
   UnreachableCosts.clear();
@@ -135,6 +135,20 @@ __host__ bool Graph::checkAdjMatricesCoherence() const {
   return checkHostMatrix() &&
          std::equal(CurDeviceAdjMatrix.begin(), CurDeviceAdjMatrix.end(),
                     HostAdjMatrix.begin(), HostAdjMatrix.end());
+}
+
+thrust::host_vector<unsigned> Graph::getNeighbours(unsigned NodeIdx) {
+  auto Res = thrust::host_vector<unsigned>{};
+  auto NumOfNodes = size();
+  constexpr auto NoEdge = -1;
+
+  for (size_t i = 0; i < NumOfNodes; ++i) {
+    if (i != NodeIdx && 
+        (HostAdjMatrix[i][NodeIdx] != NoEdge ||
+         HostAdjMatrix[NodeIdx][i] != NoEdge))
+      Res.push_back(i);
+  }
+  return Res;
 }
 
 } // namespace device
