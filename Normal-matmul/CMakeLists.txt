@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 
 project(Example LANGUAGES CXX CUDA)
 
+
+find_package(CUDAToolkit REQUIRED)
+include_directories(${CUDAToolkit_INCLUDE_DIRS})
+
 add_executable(MatMul 
                main.cu
                Utils.cpp)

@@ -338,8 +338,8 @@ Graph::Cost_t Solution::calcFinalCost() const {
     TotalCost += Edge->getCost(LhsSelection, RhsSelection);
   }
 
-  if (FinalCost && TotalCost != FinalCost)
-    utils::reportFatalError("Selections and final cost are not coherent");
+  if (FinalCost && !utils::isEqual(TotalCost, *FinalCost))
+    utils::reportFatalError("Selections and final cost are not coherent:");
   return TotalCost;
 }
 

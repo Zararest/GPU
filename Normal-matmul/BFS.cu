@@ -153,7 +153,9 @@ void BFS(Config Cfg) {
     Ans = host::readBFS(S);
     Graph = host::readMatrix<host::Relation>(S);
   } else {
-    auto GenRes = host::generateGraph(Cfg.Size);
+    auto GenRes = host::generateGraph(Cfg.Size, 
+                                      Cfg.Size / 64, 
+                                      Cfg.Size / 128);
     Ans = std::move(GenRes.BFS);
     Graph = std::move(GenRes.Graph);
   }

@@ -1,0 +1,56 @@
+graph Dump {
+node[color=red, fontsize=14, style=filled, shape=oval]
+"Solution:772.276" [color=coral, fontsize=18, style=filled, shape=oval]
+"0x63b0fc284c30" [label = "0::0 1"]
+"0x63b0fc284ce0" [label = "0::1 1"]
+"0x63b0fc284e80" [label = "0::2 2"]
+"0x63b0fc284fd0" [label = "0::3 1"]
+"0x63b0fc285120" [label = "0::4 1"]
+"0x63b0fc285280" [label = "0::5 2"]
+"0x63b0fc2853e0" [label = "0::6 2"]
+"0x63b0fc285520" [label = "0::7 2"]
+"0x63b0fc285660" [label = "0::8 0"]
+"0x63b0fc285830" [label = "0::9 1"]
+"0x63b0fc285a00" [label = "0::10 2"]
+"0x63b0fc285b40" [label = "0::11 2"]
+"0x63b0fc285c80" [label = "0::12 0"]
+"0x63b0fc285dc0" [label = "0::13 1"]
+"0x63b0fc285f00" [label = "0::14 0"]
+"0x63b0fc286040" [label = "0::15 0"]
+"0x63b0fc286180" [label = "0::16 2"]
+"0x63b0fc284c30" -- "0x63b0fc284ce0"
+"0x63b0fc284ce0" -- "0x63b0fc284e80"
+"0x63b0fc284e80" -- "0x63b0fc284fd0"
+"0x63b0fc284fd0" -- "0x63b0fc285120"
+"0x63b0fc285120" -- "0x63b0fc285280"
+"0x63b0fc285280" -- "0x63b0fc2853e0"
+"0x63b0fc2853e0" -- "0x63b0fc285520"
+"0x63b0fc285520" -- "0x63b0fc285660"
+"0x63b0fc285660" -- "0x63b0fc285830"
+"0x63b0fc285830" -- "0x63b0fc285a00"
+"0x63b0fc285a00" -- "0x63b0fc285b40"
+"0x63b0fc285b40" -- "0x63b0fc285c80"
+"0x63b0fc285c80" -- "0x63b0fc285dc0"
+"0x63b0fc285dc0" -- "0x63b0fc285f00"
+"0x63b0fc285f00" -- "0x63b0fc286040"
+"0x63b0fc286040" -- "0x63b0fc286180"
+"0x63b0fc284c30" -- "0x63b0fc285f00"
+"0x63b0fc284c30" -- "0x63b0fc286040"
+"0x63b0fc284ce0" -- "0x63b0fc285a00"
+"0x63b0fc284ce0" -- "0x63b0fc285f00"
+"0x63b0fc284e80" -- "0x63b0fc284c30"
+"0x63b0fc284e80" -- "0x63b0fc2853e0"
+"0x63b0fc284fd0" -- "0x63b0fc285830"
+"0x63b0fc285120" -- "0x63b0fc284e80"
+"0x63b0fc285120" -- "0x63b0fc286180"
+"0x63b0fc2853e0" -- "0x63b0fc285c80"
+"0x63b0fc2853e0" -- "0x63b0fc285f00"
+"0x63b0fc285520" -- "0x63b0fc284ce0"
+"0x63b0fc285520" -- "0x63b0fc285830"
+"0x63b0fc285830" -- "0x63b0fc286040"
+"0x63b0fc285c80" -- "0x63b0fc285830"
+"0x63b0fc285dc0" -- "0x63b0fc286180"
+"0x63b0fc285f00" -- "0x63b0fc285c80"
+"0x63b0fc286040" -- "0x63b0fc285520"
+"0x63b0fc286180" -- "0x63b0fc285280"
+}

@@ -76,3 +76,13 @@ Profile info:
 
 Reductions on GPU time: 104.997000ms
 ```
+
+# from-paper-bigger-760
+```
+--nodes-num 760 --node-size 6 --avg-neighb-num 4.5 --num-of-cliques 80
+```
+
+# from-paper-bigger-1792
+```
+ --nodes-num 1792 --node-size 2 --avg-neighb-num 9 --num-of-cliques 500
+```

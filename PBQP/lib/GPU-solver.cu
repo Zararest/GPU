@@ -200,7 +200,8 @@ struct LoopConditionHandler final : public GPUSolver::Condition {
     if (!ResPtr)
       utils::reportFatalError("Loop header accepts only LoopCondition class");
     auto CutItIsFirst = IsFirstIteration;
-    IsFirstIteration = false;
+    // FIXME: make nested loops possible
+    IsFirstIteration = !(ResPtr->getCondition() || CutItIsFirst);
     return ResPtr->getCondition() || CutItIsFirst;
   }
 };
@@ -1129,7 +1130,6 @@ void ReductionsSolver::addPasses(PassManager &PM) {
   // Loop with RN reductions
   PM.addLoopStart(Condition_t{new LoopConditionHandler});
     PM.addPass(Pass_t{new RNReduction}, "RN");
-    PM.addPass(Pass_t{new R1Reduction}, "R1");
     PM.addPass(Pass_t{new R0Reduction}, "R0");
     PM.addPass(Pass_t{new R1Reduction}, "R1");
     PM.addPass(Pass_t{new R1Reduction}, "R1");

@@ -83,7 +83,7 @@ __host__ void Graph::removeUnreachableCosts() {
     DEBUG_EXPR(std::cout << "Removing unreachable: " << 
                Unreachable << "\n");
     // FIXME with this cleanup pass is not working
-    CostMatrices[Unreachable].free();
+    //CostMatrices[Unreachable].free();
     CostMatrices[Unreachable] = device::Matrix<Cost_t>{};
   }
   UnreachableCosts.clear();

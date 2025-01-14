@@ -30,7 +30,7 @@ def main():
   matmul_path = './build/MatMul'
   max_size = 4096 * 2
   min_size = 100
-  num_of_measures = 30
+  num_of_measures = 10
 
   N_array = np.linspace(min_size, max_size, num_of_measures)
   N_array_CPU = N_array[:CPU_measures_num]

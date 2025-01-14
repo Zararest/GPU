@@ -36,10 +36,12 @@ double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
   if (!OnlyTime)
     printProfileInfo(ProfileInfo);
 
+  auto TimeWithoutLoad = ProfileInfo[1].second;
+
   auto SolutionOS = std::ofstream(AnsFileName + "-GPU.dot");
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
-  return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
+  return utils::to_milliseconds_fractional(TimeWithoutLoad);
 }
 
 double measureCPU(const std::string &InFileName,
