@@ -409,8 +409,10 @@ struct LLVMNode final {
     auto SS = std::stringstream(Data);
     auto ParsedData = std::vector<Graph::Cost_t>{};
     auto Token = std::string{};
-    while (std::getline(SS, Token))
+    while (SS >> Token) {
       ParsedData.push_back(dataToFloat(Token));
+    }
+    return ParsedData;
   }
 
   static std::pair<size_t, LLVMNode> parse(std::string Str) {
