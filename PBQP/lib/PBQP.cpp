@@ -3,6 +3,7 @@
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
+#include <regex>
 
 namespace PBQP {
 
@@ -388,4 +389,51 @@ void Solution::printSummary(std::ostream &OS) const {
   for (auto [NodeIdx, Selection] : SelectedVariants)
     OS << "\t" << NodeIdx << " -> " << Selection << "\n";
 }
+
+struct LLVMNode final {
+  std::vector<Graph::Cost_t> Cost;
+  std::string Name;
+  
+  static std::regex getNodeRegex() {
+    return std::regex("([[:digit:]])+ \\([_[:alnum:]]+:(%[[:digit:]]+)\\): \\[(.*)\\]");
+  }
+
+  static Graph::Cost_t dataToFloat(const std::string &Str) {
+    if (Str == "INF")
+      return std::numeric_limits<Graph::Cost_t>::infinity();
+    return std::stof(Str);
+  }
+
+  static std::vector<Graph::Cost_t> parseData(std::string Data) {
+    std::replace( Data.begin(), Data.end(), ',', ' ');
+    auto SS = std::stringstream(Data);
+    auto ParsedData = std::vector<Graph::Cost_t>{};
+    auto Token = std::string{};
+    while (std::getline(SS, Token))
+      ParsedData.push_back(dataToFloat(Token));
+  }
+
+  static std::pair<size_t, LLVMNode> parse(std::string Str) {
+    auto FullRegex = getNodeRegex();
+    auto EndIt = std::sregex_token_iterator();
+
+    auto NumIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 1);
+    assert (NumIt != EndIt);
+    auto Num = std::stol(*NumIt);
+    
+    auto NameIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 2);
+    assert(NameIt != EndIt);
+
+    auto DataIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 3);
+    assert(DataIt != EndIt);
+
+    return {Num,LLVMNode{parseData(*DataIt), *NameIt}};
+  }
+};
+
+// Function to read PBQP graph from LLVM representation
+Graph GraphBuilders::readLLVM(std::istream &IS) {
+
+}
+
 } // namespace PBQP

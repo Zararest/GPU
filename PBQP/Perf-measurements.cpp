@@ -3,7 +3,6 @@
 #include "PBQP.h"
 
 #include <fstream>
-#include <iterator>
 
 void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
   std::cout << "Profile info:\n\t";

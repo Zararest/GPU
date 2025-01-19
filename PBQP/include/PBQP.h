@@ -215,4 +215,10 @@ struct Solver {
   virtual ~Solver() {}
 };
 
+namespace GraphBuilders {
+
+Graph readLLVM(std::istream &IS);
+
+} // namespace GraphBuilders
+
 } // namespace PBQP
