@@ -1,9 +1,14 @@
 #include "PBQP.h"
+#include "Utils.h"
 
+#include <algorithm>
+#include <cstdlib>
+#include <iterator>
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
 #include <regex>
+#include <vector>
 
 namespace PBQP {
 
@@ -393,9 +398,10 @@ void Solution::printSummary(std::ostream &OS) const {
 struct LLVMNode final {
   std::vector<Graph::Cost_t> Cost;
   std::string Name;
-  
+
+  // Braces without \\ are subgroups for an iterator
   static std::regex getNodeRegex() {
-    return std::regex("([[:digit:]])+ \\([_[:alnum:]]+:(%[[:digit:]]+)\\): \\[(.*)\\]");
+    return std::regex("([[:digit:]]+) \\([_[:alnum:]]+:(%[[:digit:]]+)\\): \\[(.*)\\]");
   }
 
   static Graph::Cost_t dataToFloat(const std::string &Str) {
@@ -404,7 +410,7 @@ struct LLVMNode final {
     return std::stof(Str);
   }
 
-  static std::vector<Graph::Cost_t> parseData(std::string Data) {
+  static std::vector<Graph::Cost_t> parseData(const std::string &Data) {
     std::replace( Data.begin(), Data.end(), ',', ' ');
     auto SS = std::stringstream(Data);
     auto ParsedData = std::vector<Graph::Cost_t>{};
@@ -415,14 +421,14 @@ struct LLVMNode final {
     return ParsedData;
   }
 
-  static std::pair<size_t, LLVMNode> parse(std::string Str) {
+  static std::pair<size_t, LLVMNode> parse(const std::string &Str) {
     auto FullRegex = getNodeRegex();
     auto EndIt = std::sregex_token_iterator();
 
     auto NumIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 1);
     assert (NumIt != EndIt);
     auto Num = std::stol(*NumIt);
-    
+
     auto NameIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 2);
     assert(NameIt != EndIt);
 
@@ -433,9 +439,94 @@ struct LLVMNode final {
   }
 };
 
+struct LLVMEdge final {
+  size_t LhsNode, RhsNode, H, W;
+  std::vector<Graph::Cost_t> CostMatrix;
+
+  static std::regex getEdgeRegex() {
+    auto NodeRegex = 
+      std::string{"([[:digit:]]+) \\([_[:alnum:]]+:%[[:digit:]]+\\) ([[:digit:]])+"};
+    return std::regex(NodeRegex + " rows / " + NodeRegex + " cols:"
+                      "((\\n\\[(.*)\\])+)");
+  }
+
+  static std::vector<Graph::Cost_t> parseData(const std::string &DataStr) {
+    auto Data = std::vector<Graph::Cost_t>{};
+    auto SS = std::stringstream{DataStr};
+    auto Line = std::string{};
+    while (SS >> Line) {
+      auto ParsedLine = LLVMNode::parseData(Line);
+      Data.insert(Data.end(), ParsedLine.begin(), ParsedLine.end());
+    }
+    return Data;
+  }
+
+  static LLVMEdge parse(const std::string &Str) {
+    auto FullRegex = getEdgeRegex();
+    auto EndIt = std::sregex_token_iterator();
+
+    auto Substrings = std::vector<std::string>{};
+    auto LhsIDIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 1);
+    assert(LhsIDIt != EndIt);
+    auto RowsNumIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 2);
+    assert(RowsNumIt != EndIt);
+    auto RhsIDIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 3);
+    assert(RhsIDIt != EndIt);
+    auto ColsNumIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 4);
+    assert(ColsNumIt != EndIt);
+    auto Edge = LLVMEdge{std::stoull(*LhsIDIt), std::stoull(*RhsIDIt),
+                                   std::stoull(*RowsNumIt), std::stoull(*ColsNumIt)};
+
+    auto DataIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 5);
+    assert(DataIt != EndIt);
+    Edge.CostMatrix = parseData(*DataIt);
+    return Edge;
+  }
+};
+
 // Function to read PBQP graph from LLVM representation
 Graph GraphBuilders::readLLVM(std::istream &IS) {
+  auto Data = std::string{};
+  auto SS = std::stringstream(Data);
+  auto EndIt = std::sregex_token_iterator();
 
+  auto NodeRegex = LLVMNode::getNodeRegex();
+  auto NodesBeg = std::sregex_token_iterator(Data.cbegin(), Data.cend(), NodeRegex);
+  auto MapIdsToNodes = std::unordered_map<size_t, LLVMNode>{};
+  std::transform(NodesBeg, EndIt, std::inserter(MapIdsToNodes, MapIdsToNodes.begin()),
+    [](auto &&DataStr) {
+      return LLVMNode::parse(DataStr);
+    }
+  );
+
+  auto EdgeRegex = LLVMEdge::getEdgeRegex();
+  auto EdgesBeg = std::sregex_token_iterator(Data.cbegin(), Data.cend(), EdgeRegex);
+  auto Edges = std::vector<LLVMEdge>{};
+  std::transform(EdgesBeg, EndIt, std::back_inserter(Edges),
+    [](auto &&DataStr) {
+      return LLVMEdge::parse(DataStr);
+    }
+  );
+  // TODO debug this shit
+  auto NewGraph = Graph{};
+  auto NodeIdsToNodes = std::unordered_map<size_t, Graph::Node *>{};
+  for (auto &&[Id, LLVMNode] : MapIdsToNodes) {
+    auto CostVector = host::Matrix<Graph::Cost_t>(LLVMNode.Cost.begin(), LLVMNode.Cost.end(),
+                                                  LLVMNode.Cost.size(), 1u);
+    auto &Node = NewGraph.addNode(std::move(CostVector));
+    Node.changeName(std::move(LLVMNode.Name));
+    NodeIdsToNodes[Id] = &Node;
+  }
+
+  for (auto &&LLVMEdge : Edges) {
+    auto LhsNodeIt = NodeIdsToNodes.find(LLVMEdge.LhsNode);
+    auto RhsNodeIt = NodeIdsToNodes.find(LLVMEdge.RhsNode);
+    assert(LhsNodeIt != NodeIdsToNodes.end() && RhsNodeIt != NodeIdsToNodes.end());
+    auto CostMatrix = host::Matrix<Graph::Cost_t>(LLVMEdge.CostMatrix.begin(), LLVMEdge.CostMatrix.end(),
+                                                  LLVMEdge.H, LLVMEdge.W);
+    NewGraph.addEdge(*LhsNodeIt->second, std::move(CostMatrix), *LhsNodeIt->second);
+  }
+  return NewGraph;
 }
 
 } // namespace PBQP
