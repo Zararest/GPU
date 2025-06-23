@@ -410,8 +410,8 @@ struct LLVMNode final {
     return std::stof(Str);
   }
 
-  static std::vector<Graph::Cost_t> parseData(const std::string &Data) {
-    std::replace( Data.begin(), Data.end(), ',', ' ');
+  static std::vector<Graph::Cost_t> parseData(std::string Data) {
+    std::replace(Data.begin(), Data.end(), ',', ' ');
     auto SS = std::stringstream(Data);
     auto ParsedData = std::vector<Graph::Cost_t>{};
     auto Token = std::string{};

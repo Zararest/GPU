@@ -16,7 +16,7 @@ https://hub.docker.com/r/nvidia/cuda
 Install cuda dev image:
 ```bash
 docker login
-docker pull nvidia/cuda:11.6.1-devel-ubuntu20.04
+docker pull nvidia/cuda:12.3.2-devel-ubuntu22.04
 sudo apt install -y nvidia-container-runtime
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
