@@ -1,5 +1,8 @@
 # Cuda container
 ## Install deps
+Cuda 12.9 is not working for gtx 1660ti max-Q.
+Cuda 11.6.1 is used instead.
+
 Nvidia divers are required in order to support cuda 12.9:
 ```
 sudo apt install nvidia-driver-575 nvidia-persistenced \
@@ -13,7 +16,7 @@ https://hub.docker.com/r/nvidia/cuda
 Install cuda dev image:
 ```bash
 docker login
-docker pull nvidia/cuda:12.4.0-devel-ubuntu24.04
+docker pull nvidia/cuda:11.6.1-devel-ubuntu20.04
 sudo apt install -y nvidia-container-runtime
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker

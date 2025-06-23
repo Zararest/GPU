@@ -1,7 +1,7 @@
-FROM nvidia/cuda:12.9.0-devel-ubuntu24.04
+FROM nvidia/cuda:11.6.1-devel-ubuntu20.04
+
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN set -x
 RUN apt-get update
-RUN apt-get -y install \
-  vim less man jq htop curl wget git sudo ca-certificates \
-  python3 unzip openssh-client neofetch pip build-essential pandoc cmake
+RUN apt-get -y install build-essential cmake
