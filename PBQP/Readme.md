@@ -11,7 +11,7 @@ make
 
 Run performance:
 ```bash
-./Perf-measure (--use-GPU/--use-CPU) --in-file file-with-graph --out-file file-to-dump --check-solution 
+./Perf-measure (--use-GPU/--use-CPU) --in-file file-with-graph --out-file file-to-dump --check-solution
 ```
 
 

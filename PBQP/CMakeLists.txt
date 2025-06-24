@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-12/bin/nvcc)
+
 project(PBQP LANGUAGES CXX CUDA)
 
 find_package(CUDAToolkit REQUIRED)
-include_directories(${CUDAToolkit_INCLUDE_DIRS})
+include_directories("/usr/local/cuda-12.6/include"
+                    "/usr/local/cuda/include")
+
 
 add_subdirectory(lib)
 target_include_directories(PBQP PUBLIC include/)

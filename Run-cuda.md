@@ -30,3 +30,9 @@ sudo docker run -it -d -v ~/:/root --runtime=nvidia --gpus all --name PBQP-dev -
 Attach to container:
 - with VSCode: `ctrl+P`: Attach to running container
 - with CLI: `docker attach PBQP-dev`
+
+Start container:
+```bash
+docker start PBQP-dev
+docker attach PBQP-dev
+```
