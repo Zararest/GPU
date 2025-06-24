@@ -14,7 +14,6 @@ Run performance:
 ./Perf-measure (--use-GPU/--use-CPU) --in-file file-with-graph --out-file file-to-dump --check-solution
 ```
 
-
 ## Reduction pass
 All reductions accepts `GPUResult` class with GPU graph and `Solution` class. 
 They also returns the same class, but with extended solution.
@@ -31,4 +30,9 @@ Finds nodes without neighbors and removes them adding best cost to the silution.
 ## GPU evaluation
 ```bash
 nvprof ./program
+```
+
+## Print graph
+```bash
+./Graph-print --in-file file-with-graph --out-file file-to-dump --LLVM
 ```

@@ -9,7 +9,7 @@
 #include <set>
 #include <vector>
 
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) expr

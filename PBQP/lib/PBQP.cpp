@@ -401,7 +401,7 @@ struct LLVMNode final {
 
   // Braces without \\ are subgroups for an iterator
   static std::regex getNodeRegex() {
-    return std::regex("([[:digit:]]+) \\([_[:alnum:]]+:(%[[:digit:]]+)\\): \\[(.*)\\]");
+    return std::regex("([[:digit:]]+) \\([[:alnum:]]+:(%[[:digit:]]+)\\): (\\[(.*)\\])+");
   }
 
   static Graph::Cost_t dataToFloat(const std::string &Str) {
@@ -412,6 +412,8 @@ struct LLVMNode final {
 
   static std::vector<Graph::Cost_t> parseData(std::string Data) {
     std::replace(Data.begin(), Data.end(), ',', ' ');
+    std::replace(Data.begin(), Data.end(), '[', ' ');
+    std::replace(Data.begin(), Data.end(), ']', ' ');
     auto SS = std::stringstream(Data);
     auto ParsedData = std::vector<Graph::Cost_t>{};
     auto Token = std::string{};
@@ -435,7 +437,7 @@ struct LLVMNode final {
     auto DataIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 3);
     assert(DataIt != EndIt);
 
-    return {Num,LLVMNode{parseData(*DataIt), *NameIt}};
+    return {Num, LLVMNode{parseData(*DataIt), *NameIt}};
   }
 };
 
@@ -445,7 +447,7 @@ struct LLVMEdge final {
 
   static std::regex getEdgeRegex() {
     auto NodeRegex = 
-      std::string{"([[:digit:]]+) \\([_[:alnum:]]+:%[[:digit:]]+\\) ([[:digit:]])+"};
+      std::string{"([[:digit:]]+) \\([_[:alnum:]]+:%[[:digit:]]+\\) ([[:digit:]]+)"};
     return std::regex(NodeRegex + " rows / " + NodeRegex + " cols:"
                       "((\\n\\[(.*)\\])+)");
   }
@@ -475,7 +477,7 @@ struct LLVMEdge final {
     auto ColsNumIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 4);
     assert(ColsNumIt != EndIt);
     auto Edge = LLVMEdge{std::stoull(*LhsIDIt), std::stoull(*RhsIDIt),
-                                   std::stoull(*RowsNumIt), std::stoull(*ColsNumIt)};
+                         std::stoull(*RowsNumIt), std::stoull(*ColsNumIt)};
 
     auto DataIt = std::sregex_token_iterator(Str.cbegin(), Str.cend(), FullRegex, 5);
     assert(DataIt != EndIt);
@@ -488,6 +490,8 @@ struct LLVMEdge final {
 Graph GraphBuilders::readLLVM(std::istream &IS) {
   auto Data = std::string{};
   auto SS = std::stringstream(Data);
+  SS << IS.rdbuf();
+  Data = SS.str();
   auto EndIt = std::sregex_token_iterator();
 
   auto NodeRegex = LLVMNode::getNodeRegex();
@@ -499,6 +503,8 @@ Graph GraphBuilders::readLLVM(std::istream &IS) {
     }
   );
 
+  DEBUG_EXPR(std::cout << "Number of parsed nodes:" << MapIdsToNodes.size() << "\n");
+
   auto EdgeRegex = LLVMEdge::getEdgeRegex();
   auto EdgesBeg = std::sregex_token_iterator(Data.cbegin(), Data.cend(), EdgeRegex);
   auto Edges = std::vector<LLVMEdge>{};
@@ -507,12 +513,15 @@ Graph GraphBuilders::readLLVM(std::istream &IS) {
       return LLVMEdge::parse(DataStr);
     }
   );
-  // TODO debug this shit
+
+  DEBUG_EXPR(std::cout << "Number of parsed edges:" << Edges.size() << "\n");
+
   auto NewGraph = Graph{};
   auto NodeIdsToNodes = std::unordered_map<size_t, Graph::Node *>{};
   for (auto &&[Id, LLVMNode] : MapIdsToNodes) {
     auto CostVector = host::Matrix<Graph::Cost_t>(LLVMNode.Cost.begin(), LLVMNode.Cost.end(),
                                                   LLVMNode.Cost.size(), 1u);
+    DEBUG_EXPR(std::cout << "Vector: " << LLVMNode.Cost.size() << "x1\n");
     auto &Node = NewGraph.addNode(std::move(CostVector));
     Node.changeName(std::move(LLVMNode.Name));
     NodeIdsToNodes[Id] = &Node;
@@ -522,8 +531,12 @@ Graph GraphBuilders::readLLVM(std::istream &IS) {
     auto LhsNodeIt = NodeIdsToNodes.find(LLVMEdge.LhsNode);
     auto RhsNodeIt = NodeIdsToNodes.find(LLVMEdge.RhsNode);
     assert(LhsNodeIt != NodeIdsToNodes.end() && RhsNodeIt != NodeIdsToNodes.end());
+    DEBUG_EXPR(std::cout << "Number of costs: " << LLVMEdge.CostMatrix.size() << 
+                            " with H: " << LLVMEdge.H << " and W:" << LLVMEdge.W << "\n");
     auto CostMatrix = host::Matrix<Graph::Cost_t>(LLVMEdge.CostMatrix.begin(), LLVMEdge.CostMatrix.end(),
                                                   LLVMEdge.H, LLVMEdge.W);
+    DEBUG_EXPR(std::cout << "Matrix: " << LLVMEdge.H << "x" << LLVMEdge.W << "\n");
+    // TODO: transpose vector
     NewGraph.addEdge(*LhsNodeIt->second, std::move(CostMatrix), *LhsNodeIt->second);
   }
   return NewGraph;
