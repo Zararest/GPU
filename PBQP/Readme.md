@@ -36,3 +36,8 @@ nvprof ./program
 ```bash
 ./Graph-print --in-file file-with-graph --out-file file-to-dump --LLVM
 ```
+
+# Examples
+```bash
+./Graph-print --in-file ../tests/llvm/hello.ll.main.0.pbqpgraph --out-file out.dot --LLVM
+```

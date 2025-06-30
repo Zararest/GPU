@@ -536,8 +536,7 @@ Graph GraphBuilders::readLLVM(std::istream &IS) {
     auto CostMatrix = host::Matrix<Graph::Cost_t>(LLVMEdge.CostMatrix.begin(), LLVMEdge.CostMatrix.end(),
                                                   LLVMEdge.H, LLVMEdge.W);
     DEBUG_EXPR(std::cout << "Matrix: " << LLVMEdge.H << "x" << LLVMEdge.W << "\n");
-    // TODO: transpose vector
-    NewGraph.addEdge(*LhsNodeIt->second, std::move(CostMatrix), *LhsNodeIt->second);
+    NewGraph.addEdge(*LhsNodeIt->second, std::move(CostMatrix), *RhsNodeIt->second);
   }
   return NewGraph;
 }
