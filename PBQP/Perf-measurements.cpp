@@ -1,6 +1,7 @@
 #include "CPU-solver.h"
 #include "GPU-solver.cu.h"
 #include "PBQP.h"
+#include "Utils.h"
 
 #include <fstream>
 
@@ -19,12 +20,23 @@ void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
   std::cout << std::endl;
 }
 
-double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
-                  bool OnlyTime) {
-  auto IS = std::ifstream{InFileName};
+PBQP::Graph readGraph(std::istream &IS, bool ParseLLVM) {
   auto Graph = PBQP::Graph{};
-  Graph.read(IS);
-  assert(Graph.validate());
+  if (ParseLLVM) {
+    Graph = PBQP::GraphBuilders::readLLVM(IS);
+  } else {
+    Graph.read(IS);
+  }
+  if (!Graph.validate())
+    utils::reportFatalError("Invalid graph");
+  return Graph;
+}
+
+double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
+                  bool OnlyTime, bool ParseLLVM) {
+  auto IS = std::ifstream{InFileName};
+  auto Graph = readGraph(IS, ParseLLVM);
+
   auto Solver = PBQP::GPUFullSearch{};
 
   auto Start = std::chrono::steady_clock::now();
@@ -44,11 +56,10 @@ double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
 }
 
 double measureCPU(const std::string &InFileName,
-                  const std::string &AnsFileName) {
+                  const std::string &AnsFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = PBQP::Graph{};
-  Graph.read(IS);
-  assert(Graph.validate());
+  auto Graph = readGraph(IS, ParseLLVM);
+
   auto Solver = PBQP::CPUFullSearch{};
 
   auto Start = std::chrono::steady_clock::now();
@@ -61,16 +72,18 @@ double measureCPU(const std::string &InFileName,
   return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
 }
 
-void checkSolution(const std::string &InFileName) {
+void checkSolution(const std::string &InFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = PBQP::Graph{};
-  Graph.read(IS);
-  assert(Graph.validate());
+  auto Graph = readGraph(IS, ParseLLVM);
+
   auto GPUSolver = PBQP::ReductionsSolver{};
   auto RefSolver = PBQP::GPUFullSearch{};
 
   auto RefAns = RefSolver.solve(PBQP::Graph::copy(Graph));
   auto GPUAns = GPUSolver.solve(PBQP::Graph::copy(Graph));
+
+  DEBUG_EXPR(std::cout << "reference:\n"; RefAns.print(std::cout);
+             std::cout << "reduction:\n"; GPUAns.print(std::cout));
 
   if (!utils::isEqual(RefAns.getFinalCost(), GPUAns.getFinalCost()))
     utils::reportFatalError("Differen answers: Ref[" +
@@ -79,11 +92,9 @@ void checkSolution(const std::string &InFileName) {
 }
 
 double measureReductions(const std::string &InFileName,
-                  const std::string &AnsFileName) {
+                  const std::string &AnsFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = PBQP::Graph{};
-  Graph.read(IS);
-  assert(Graph.validate());
+  auto Graph = readGraph(IS, ParseLLVM);
 
   auto Solver = PBQP::ReductionsSolver{};
 
@@ -109,6 +120,7 @@ int main(int Argc, char **Argv) {
   CLPars.addOption("use-CPU", utils::CLOption::Type::Flag);
   CLPars.addOption("only-time", utils::CLOption::Type::Flag);
   CLPars.addOption("check-solution", utils::CLOption::Type::Flag);
+  CLPars.addOption("LLVM", utils::CLOption::Type::Flag);
 
   CLPars.parseOptions();
   auto InFileName = std::string{"./graphs/default.out"};
@@ -118,6 +130,7 @@ int main(int Argc, char **Argv) {
   auto UseHeuristic = CLPars.getOption("use-heuristic") == "true";
   auto OnlyTime = false;
   auto CheckSolution = false;
+  auto ParseLLVM = false;
 
   if (CLPars.getOption("in-file") != "")
     InFileName = CLPars.getOption("in-file");
@@ -127,6 +140,8 @@ int main(int Argc, char **Argv) {
     OnlyTime = CLPars.getOption("only-time") == "true";
   if (CLPars.getOption("check-solution") != "")
     CheckSolution = CLPars.getOption("check-solution") == "true";
+  if (CLPars.getOption("LLVM") != "")
+    ParseLLVM = CLPars.getOption("LLVM") == "true";
 
   if (UseCPU && UseGPU)
     utils::reportFatalError("Use only one solver");
@@ -136,21 +151,21 @@ int main(int Argc, char **Argv) {
 
   auto OutString = std::string{};
   if (UseGPU) {
-    auto Time = measureGPU(InFileName, OutFileName, OnlyTime);
+    auto Time = measureGPU(InFileName, OutFileName, OnlyTime, ParseLLVM);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
       OutString = "GPU time: " + std::to_string(Time) + "ms\n";
   }
 
   if (UseCPU) {
-    auto Time = measureCPU(InFileName, OutFileName);
+    auto Time = measureCPU(InFileName, OutFileName, ParseLLVM);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
       OutString = "CPU time: " + std::to_string(Time) + "ms\n";
   }
 
   if (UseHeuristic) {
-    auto Time = measureReductions(InFileName, OutFileName);
+    auto Time = measureReductions(InFileName, OutFileName, ParseLLVM);
     OutString = std::to_string(Time) + "\n";
     if (!OnlyTime)
       OutString = "Reductions on GPU time: " + std::to_string(Time) + "ms\n";
@@ -159,5 +174,5 @@ int main(int Argc, char **Argv) {
   std::cout << OutString << std::endl;
 
   if (CheckSolution)
-    checkSolution(InFileName);
+    checkSolution(InFileName, ParseLLVM);
 }

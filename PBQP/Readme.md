@@ -11,7 +11,7 @@ make
 
 Run performance:
 ```bash
-./Perf-measure (--use-GPU/--use-CPU) --in-file file-with-graph --out-file file-to-dump --check-solution
+./Perf-measure (--use-GPU/--use-CPU/--use-heuristic) --in-file file-with-graph --out-file file-to-dump --check-solution
 ```
 
 ## Reduction pass
@@ -40,4 +40,5 @@ nvprof ./program
 # Examples
 ```bash
 ./Graph-print --in-file ../tests/llvm/hello.ll.main.0.pbqpgraph --out-file out.dot --LLVM
+./Perf-measure --use-heuristic --in-file ../tests/llvm/hello.ll.main.0.pbqpgraph --out-file hello-llvm-solution.out --LLVM --check-solution
 ```

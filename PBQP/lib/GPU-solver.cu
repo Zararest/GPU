@@ -411,7 +411,6 @@ __device__ void __performR1Reduction(device::Graph &Graph,
                                      unsigned *DependentSolutions,
                                      unsigned ThreadIdInReduction,
                                      unsigned ThreadsPerReduction) {
-  
   auto Single = Nodes.getSingleNode();
   auto Neighb = Nodes.getNeighbour();
   auto [PosY, PosX] = Nodes.getPosOfCostMatix();
@@ -624,7 +623,7 @@ public:
                   << NodesToReduce.getNeighbour() << " -- ...\n");
       if (!DefiningNodeHostIdx || !DependentHostIdx)
         utils::reportFatalError("Node has already been reduced");
-      
+
       auto DefiningSolutionsSize = Graph.getNodesCostSize(*DefiningNodeHostIdx);
       auto NewSolution = DeviceDependentSolution{
           thrust::device_vector<unsigned>(DefiningSolutionsSize),
