@@ -363,7 +363,7 @@ public:
   //                  V
   //                 ...
   // In order to make abstraction over these 2 cases,
-  //  this class translates selcetions in terms of Single/Neighb
+  //  this class translates selections in terms of Single/Neighb
   //  into real matrix pos.
   template <typename T>
   __device__ auto getCostForSelections(device::Matrix<T> &CostMatrix,
@@ -383,7 +383,7 @@ __device__ utils::Pair<unsigned, Graph::Cost_t> __getBestDependentSelection(
                  Nodes.getCostForSelections(
                      CostMatrix, 0u /*SingleNodeSelection*/, NeighbSelection);
   auto BestSelection = 0u;
-  for (unsigned CurDependSelection = 0u; CurDependSelection < NumOfSelections;
+  for (unsigned CurDependSelection = 1u; CurDependSelection < NumOfSelections;
        ++CurDependSelection) {
     auto CurCost = SingleNodeVec[CurDependSelection][0] +
                    Nodes.getCostForSelections(CostMatrix, CurDependSelection,
@@ -420,7 +420,6 @@ __device__ void __performR1Reduction(device::Graph &Graph,
   auto &SingleNodeVec = Graph.getCostMatrix(Single);
   auto &NeighbNodeVec = Graph.getCostMatrix(Neighb);
   auto NumOfDefiningSolutions = NeighbNodeVec.h();
-
   assert(ThreadsPerReduction > 0);
   for (auto CurNeighbSelection = ThreadIdInReduction;
        CurNeighbSelection < NumOfDefiningSolutions;
@@ -431,7 +430,6 @@ __device__ void __performR1Reduction(device::Graph &Graph,
     DependentSolutions[CurNeighbSelection] = BestSelection;
     NeighbNodeVec[CurNeighbSelection][0] += AdditionalCost;
   }
-
   // Removes cost matrix and cost vector of the removed node
   if (ThreadIdInReduction == 0) {
     constexpr auto NoNode = -1;
@@ -470,7 +468,7 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   auto CurNodesToReduce = NodesToReduceR1{};
   auto NumOfNeighbours = 0u;
   for (unsigned i = 0; i < GraphSize; ++i) {
-    if (i == GlobalId)
+    if (i != GlobalId)
       continue;
     bool HasOutEdge = AdjMatrix[GlobalId][i] != NoEdge;
     bool HasInEdge = AdjMatrix[i][GlobalId] != NoEdge;

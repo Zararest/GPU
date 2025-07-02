@@ -41,4 +41,5 @@ nvprof ./program
 ```bash
 ./Graph-print --in-file ../tests/llvm/hello.ll.main.0.pbqpgraph --out-file out.dot --LLVM
 ./Perf-measure --use-heuristic --in-file ../tests/llvm/hello.ll.main.0.pbqpgraph --out-file hello-llvm-solution.out --LLVM --check-solution
+/usr/local/cuda/bin/compute-sanitizer --tool memcheck  ./programm
 ```
