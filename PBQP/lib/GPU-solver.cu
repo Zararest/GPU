@@ -961,9 +961,11 @@ void GPUSolver::PassManager::addLoopEnd() {
 
 GPUSolver::Res_t GPUSolver::PassManager::runPass(Pass_t &Pass, Res_t PrevRes,
                                                  Graph &Graph) {
+  std::cout << "Running pass: " << PassPtrToName[Pass.get()] << "\n";
   auto Start = std::chrono::steady_clock::now();
   auto Res = Pass->run(Graph, std::move(PrevRes));
   auto End = std::chrono::steady_clock::now();
+  std::cout << "end\n";
   auto *PassPtr = Pass.get();
   if (PassPtrToDuration.find(PassPtr) == PassPtrToDuration.end())
     PassPtrToDuration[PassPtr] = 0;
