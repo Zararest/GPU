@@ -11,7 +11,7 @@
 #include <vector>
 #include <iomanip>
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_EXPR(expr) expr
