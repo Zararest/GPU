@@ -126,7 +126,7 @@ public:
     utils::printMatrix(HostAdjMatrix, S);
   }
 
-  __host__ thrust::host_vector<unsigned> getNeighbours(unsigned NodeIdx);
+  __host__ thrust::host_vector<unsigned> getNeighbourIds(unsigned NodeIdx);
 
   __device__ device::Matrix<Index_t> &getAdjMatrix() { return AdjMatrix; }
 

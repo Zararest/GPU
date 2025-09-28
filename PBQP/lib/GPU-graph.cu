@@ -137,7 +137,7 @@ __host__ bool Graph::checkAdjMatricesCoherence() const {
                     HostAdjMatrix.begin(), HostAdjMatrix.end());
 }
 
-thrust::host_vector<unsigned> Graph::getNeighbours(unsigned NodeIdx) {
+thrust::host_vector<unsigned> Graph::getNeighbourIds(unsigned NodeIdx) {
   auto Res = thrust::host_vector<unsigned>{};
   auto NumOfNodes = size();
   constexpr auto NoEdge = -1;

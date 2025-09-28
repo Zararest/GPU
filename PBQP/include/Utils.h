@@ -75,6 +75,7 @@ void printMatrix(const T &Matrix, std::ostream &S) {
                             std::to_string(Rhs).size();
                    });
   auto Align = std::to_string(*WidestElt).size();
+  S << "[" << Matrix.h() << ", " << Matrix.w() << "]\n";
   for (size_t i = 0; i < Matrix.h(); ++i) {
     for (size_t j = 0; j < Matrix.w(); ++j)
       S << std::setw(Align) << Matrix[i][j] << " ";

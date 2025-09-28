@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <exception>
 #include <iostream>
 #include <vector>
 
