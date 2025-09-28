@@ -1,4 +1,5 @@
 #include "GPU-solver.cu.h"
+#include "Utils.h"
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -177,7 +178,7 @@ struct GraphDeleter final : public GPUSolver::FinalPass {
   Solution getSolution(const Graph &Graph, Res_t PrevResult) override {
     auto *GPURes = dynamic_cast<GPUResult *>(PrevResult.get());
     if (!GPURes)
-      utils::reportFatalError("There is no GPU solvers in PM");
+      utils::reportFatalError("GraphDeleter: There is no GPU solution in PM");
     GPURes->Graph.free();
     return std::move(GPURes->Sol);
   }
@@ -468,7 +469,7 @@ __global__ void __getNodesToReduceR1(device::Graph Graph,
   auto CurNodesToReduce = NodesToReduceR1{};
   auto NumOfNeighbours = 0u;
   for (unsigned i = 0; i < GraphSize; ++i) {
-    if (i != GlobalId)
+    if (i == GlobalId)
       continue;
     bool HasOutEdge = AdjMatrix[GlobalId][i] != NoEdge;
     bool HasInEdge = AdjMatrix[i][GlobalId] != NoEdge;
@@ -598,17 +599,28 @@ class DependentSolutionsForDevice final {
   thrust::device_vector<unsigned *> DeviceArrayOfReductions;
 
 public:
+  // Result of R1 reduction is a list of optimal selections
+  //  for each selection of another node
+  // Assume that right node has more than one connection (it might have only one):
+  //  Lhs node -- Rhs node -- ...
+  //                  |
+  //                 ...
+  // When there is a optimal solution for the rhs node,
+  //  it is possible to select optimal selection for the Lhs one.
+  // DependentSolutions is a structure that contains this relation.
   DependentSolutionsForDevice(
       device::Graph &GraphDevice, const Graph &Graph,
-      const thrust::host_vector<NodesToReduceR1> &AllNodesToReduce) {
+      const thrust::host_vector<NodesToReduceR1> &PairsToReduce) {
     assert(GraphDevice.checkAdjMatricesCoherence());
     DEBUG_EXPR(std::cout << "Current graph:\n");
     DEBUG_EXPR(GraphDevice.printAdjMatrix(std::cout));
     DEBUG_EXPR(std::cout << "Nodes to reduce R1:\n");
 
-    for (auto &NodesToReduce : AllNodesToReduce) {
-      auto DefiningNodeDeviceIdx = NodesToReduce.getNeighbour();
-      auto DefiningNodeHostIdx = GraphDevice.getHostNode(DefiningNodeDeviceIdx);
+    for (auto &NodesToReduce : PairsToReduce) {
+      // See "Rhs node"
+      auto DefiningNodeHostIdx =
+          GraphDevice.getHostNode(NodesToReduce.getNeighbour());
+      // See "Lhs node"
       auto DependentHostIdx =
           GraphDevice.getHostNode(NodesToReduce.getSingleNode());
       DEBUG_EXPR(std::cout << NodesToReduce.getSingleNode() << " -- "
@@ -617,6 +629,8 @@ public:
         utils::reportFatalError("Node has already been reduced");
 
       auto DefiningSolutionsSize = Graph.getNodesCostSize(*DefiningNodeHostIdx);
+      DEBUG_EXPR(std::cout << "number of dependent solutions: "
+                           << DefiningSolutionsSize << "\n");
       auto NewSolution = DeviceDependentSolution{
           thrust::device_vector<unsigned>(DefiningSolutionsSize),
           *DefiningNodeHostIdx, *DependentHostIdx};
@@ -667,7 +681,7 @@ filterDependentNodes(thrust::host_vector<NodesToReduceR1> NodesToReduce) {
   return Res;
 }
 
-thrust::device_vector<NodesToReduceR1>
+thrust::host_vector<NodesToReduceR1>
 getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   auto NumOfNodes = CurGraph.size();
   if (NumOfNodes == 0)
@@ -680,8 +694,8 @@ getNodesToReduceR1(device::Graph &CurGraph, unsigned BlockSize) {
   cudaDeviceSynchronize();
   utils::checkKernelsExec();
 
-  auto IndependentNodesToReduce = filterDependentNodes(NodesToReduceDevice);
-  return {IndependentNodesToReduce};
+  // Copy nodes from device to host and filter them
+  return filterDependentNodes(NodesToReduceDevice);
 }
 
 void commitR1ReductionToHost(
@@ -713,25 +727,28 @@ bool performR1Reduction(device::Graph &GraphDevice, const Graph &Graph,
   if (OnlyNodesToReduce.size() == 0)
     return false;
 
-  auto HostOnlyNodesToReduce =
-      thrust::host_vector<NodesToReduceR1>(OnlyNodesToReduce.size());
-  thrust::copy(OnlyNodesToReduce.begin(), OnlyNodesToReduce.end(),
-               HostOnlyNodesToReduce.begin());
+  // Get container which implements relation dependent selections
+  // (see DependentSolutionsForDevice comments)
   auto DependentSolutionsContainer =
-      DependentSolutionsForDevice(GraphDevice, Graph, HostOnlyNodesToReduce);
-  auto NumOfThreads = OnlyNodesToReduce.size() * ThreadsPerReduction;
+      DependentSolutionsForDevice(GraphDevice, Graph, OnlyNodesToReduce);
+  // Move nodes to device
+  auto DeviceNodesToReduce = thrust::device_vector<NodesToReduceR1>(OnlyNodesToReduce.size());
+  thrust::copy(OnlyNodesToReduce.begin(), OnlyNodesToReduce.end(),
+        DeviceNodesToReduce.begin());
+  // Run transformation on the device
+  auto NumOfThreads = OnlyNodesToReduce.size() * 1; // FIXME
   dim3 ThrBlockDim{BlockSize};
   dim3 BlockGridDim{utils::ceilDiv(NumOfThreads, ThrBlockDim.x)};
   __R1Reduction<<<BlockGridDim, ThrBlockDim>>>(
-      GraphDevice, thrust::raw_pointer_cast(OnlyNodesToReduce.data()),
+      GraphDevice, thrust::raw_pointer_cast(DeviceNodesToReduce.data()),
       DependentSolutionsContainer.getPointerToSolutions(),
-      OnlyNodesToReduce.size(), ThreadsPerReduction);
+      OnlyNodesToReduce.size(), 1); // FIXME
   cudaDeviceSynchronize();
   utils::checkKernelsExec();
 
   // FIXME Probably there is a memory leak because OnlyNodesToReduce causes
   // error
-  commitR1ReductionToHost(HostOnlyNodesToReduce, GraphDevice,
+  commitR1ReductionToHost(OnlyNodesToReduce, GraphDevice,
                           DependentSolutionsContainer, Sol);
 
   return true;
@@ -1085,8 +1102,8 @@ ReductionsSolver::FinalFullSearch::run(const Graph &Graph,
   if (!ResPtr)
     utils::reportFatalError("Invalid loop state in full search");
   auto &Metadata = ResPtr->getMetadata();
-  performFullSearch(Metadata.getDeviceGraph(), Metadata.getSolution(),
-                    BlockSize, MaxNumOfCombinations);
+  //performFullSearch(Metadata.getDeviceGraph(), Metadata.getSolution(),
+  //                  BlockSize, MaxNumOfCombinations);
   return Res_t{new GPUResult(std::move(Metadata.getDeviceGraph()),
                              std::move(Metadata.getSolution()))};
 }
@@ -1112,19 +1129,19 @@ void ReductionsSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new R1Reduction}, "R1");
   PM.addPass(Pass_t{new R1Reduction}, "R1");
   PM.addPass(Pass_t{new R0Reduction}, "R0");
-  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+  //PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
   PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
   PM.addLoopEnd();
   // Loop with RN reductions
-  PM.addLoopStart(Condition_t{new LoopConditionHandler});
-  PM.addPass(Pass_t{new RNReduction}, "RN");
-  PM.addPass(Pass_t{new R0Reduction}, "R0");
-  PM.addPass(Pass_t{new R1Reduction}, "R1");
-  PM.addPass(Pass_t{new R1Reduction}, "R1");
-  PM.addPass(Pass_t{new R0Reduction}, "R0");
-  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
-  PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
-  PM.addLoopEnd();
+  //PM.addLoopStart(Condition_t{new LoopConditionHandler});
+  //PM.addPass(Pass_t{new RNReduction}, "RN");
+  //PM.addPass(Pass_t{new R0Reduction}, "R0");
+  //PM.addPass(Pass_t{new R1Reduction}, "R1");
+  //PM.addPass(Pass_t{new R1Reduction}, "R1");
+  //PM.addPass(Pass_t{new R0Reduction}, "R0");
+  ////PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+  //PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
+  //PM.addLoopEnd();
 
   PM.addPass(Pass_t{new FinalFullSearch}, "Final full search with RN");
   PM.addPass(Pass_t{new GraphDeleter}, "Deleter");

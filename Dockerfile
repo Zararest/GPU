@@ -4,4 +4,4 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN set -x
 RUN apt-get update
-RUN apt-get -y install build-essential cmake
+RUN apt-get -y install build-essential cmake zsh

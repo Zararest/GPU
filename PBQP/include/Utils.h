@@ -7,7 +7,9 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 #include <set>
+#include <string>
 #include <vector>
+#include <iomanip>
 
 #define DEBUG
 
@@ -67,9 +69,15 @@ template <typename It> void print(It Beg, It End, std::ostream &S) {
 
 template <typename T>
 void printMatrix(const T &Matrix, std::ostream &S) {
+  auto WidestElt = std::max_element(Matrix.begin(), Matrix.end(),
+                   [](const auto &Lhs, const auto &Rhs) {
+                     return std::to_string(Lhs).size() <
+                            std::to_string(Rhs).size();
+                   });
+  auto Align = std::to_string(*WidestElt).size();
   for (size_t i = 0; i < Matrix.h(); ++i) {
     for (size_t j = 0; j < Matrix.w(); ++j)
-      S << Matrix[i][j] << " ";
+      S << std::setw(Align) << Matrix[i][j] << " ";
     S << "\n";
   }
 }
