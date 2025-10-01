@@ -570,9 +570,6 @@ __global__ void __commitRNReduction(device::Graph Graph, unsigned NodeToReduce,
   auto NodeToReduceCostIdx = AdjMatrix[NodeToReduce][NodeToReduce];
   constexpr auto NoNode = -1;
 
-  if (GlobalId == 0)
-    AdjMatrix[NodeToReduce][NodeToReduce] = NoNode;
-
   if (GlobalId >= NumOfNeighbours)
     return;
 
@@ -588,6 +585,14 @@ __global__ void __commitRNReduction(device::Graph Graph, unsigned NodeToReduce,
 
   AdjMatrix[NodeToReduce][Neighbour] = NoNode;
   AdjMatrix[Neighbour][NodeToReduce] = NoNode;
+}
+
+__global__ void __removeReducedNode(device::Graph Graph, unsigned NodeToReduce) {
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+  constexpr auto NoNode = -1;
+
+  if (GlobalId == 0)
+    Graph.getAdjMatrix()[NodeToReduce][NodeToReduce] = NoNode;
 }
 
 class DependentSolutionsForDevice final {
@@ -855,6 +860,8 @@ void commitRNReductionToDevice(device::Graph &GraphDevice,
       GraphDevice, NodeToReduce, SelectionForReducedNode,
       thrust::raw_pointer_cast(Neighbours.data()), Neighbours.size());
   cudaDeviceSynchronize();
+  __removeReducedNode<<<1, 1>>>(GraphDevice, NodeToReduce);
+  cudaDeviceSynchronize();
   utils::checkKernelsExec();
 }
 
@@ -961,11 +968,9 @@ void GPUSolver::PassManager::addLoopEnd() {
 
 GPUSolver::Res_t GPUSolver::PassManager::runPass(Pass_t &Pass, Res_t PrevRes,
                                                  Graph &Graph) {
-  std::cout << "Running pass: " << PassPtrToName[Pass.get()] << "\n";
   auto Start = std::chrono::steady_clock::now();
   auto Res = Pass->run(Graph, std::move(PrevRes));
   auto End = std::chrono::steady_clock::now();
-  std::cout << "end\n";
   auto *PassPtr = Pass.get();
   if (PassPtrToDuration.find(PassPtr) == PassPtrToDuration.end())
     PassPtrToDuration[PassPtr] = 0;

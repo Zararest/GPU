@@ -108,6 +108,7 @@ double measureReductions(const std::string &InFileName,
   auto SolutionOS = std::ofstream{AnsFileName + "-reductions.dot"};
   assert(SolutionOS.is_open());
   Solution.print(SolutionOS);
+  std::cout << "Final cost of the solution: " << Solution.getFinalCost() << "\n";
   return utils::to_milliseconds_fractional(utils::to_microseconds(End - Start));
 }
 
