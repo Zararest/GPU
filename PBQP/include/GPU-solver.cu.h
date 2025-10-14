@@ -141,6 +141,7 @@ class ReductionsSolver final : public GPUSolver {
     Res_t run(const Graph &Graph, Res_t PrevResult) override;
   };
 
+  // Has different heuristics based on define MOST_NEIGHB_NUM_RN_NODE
   struct RNReduction final : public GPUSolver::Pass {
     static constexpr auto BlockSize = 16ul;
     // Max number of combinations to be considered

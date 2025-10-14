@@ -109,6 +109,8 @@ template <typename T> struct MatMulResult {
 namespace device {
 
 template <typename T> class Matrix {
+  using ConstIt = const T *;
+
   size_t Width = 0;
   size_t Height = 0;
   T *Elements = nullptr;
@@ -179,5 +181,9 @@ public:
       return Proxy{Size, Elements + Row * Size};
     }
   };
+
+  __device__ ConstIt begin() const { return Elements; }
+
+  __device__ ConstIt end() const { return Elements + Width * Height; }
 };
 } // namespace device

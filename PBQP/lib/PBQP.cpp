@@ -292,7 +292,6 @@ void Solution::resolveBoundedSolutions() {
   DEBUG_EXPR(for (auto &BoundedSol : BoundedSolutions) 
                 BoundedSol.print(std::cout););
   while (Changed) {
-    DEBUG_EXPR(std::cout << "In loop\n");
     auto NewSolutons = std::unordered_map<size_t, size_t>{};
     for (auto &BoundedSol : BoundedSolutions) {
       auto DefiningNode = BoundedSol.getDefiningNode();
@@ -341,7 +340,11 @@ Graph::Cost_t Solution::calcFinalCost() const {
     auto [LhsNode, RhsNode] = Edge->getNodes();
     auto LhsSelection = GetSelection(LhsNode);
     auto RhsSelection = GetSelection(RhsNode);
-    TotalCost += Edge->getCost(LhsSelection, RhsSelection);
+    auto EdgeCost = Edge->getCost(LhsSelection, RhsSelection);
+    if (EdgeCost == Graph::InfCost)
+      std::cout << "Infinity cost for nodes: " << 
+        LhsNode->getName() << " " << RhsNode->getName() << "\n";
+    TotalCost += EdgeCost;
   }
 
   if (FinalCost && !utils::isEqual(TotalCost, *FinalCost))
