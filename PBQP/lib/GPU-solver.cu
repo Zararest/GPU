@@ -1,4 +1,5 @@
 #include "GPU-solver.cu.h"
+#include "Matrix.h"
 #include "Utils.h"
 
 #include <cassert>
@@ -564,13 +565,25 @@ __device__ Graph::Cost_t __getCost(device::Graph &Graph, unsigned NodeToReduce,
 }
 
 __host__ __device__ unsigned hashGlobalID(unsigned Seed) {
-  //return Seed; this leads to total cost of 97.7447
+  //return Seed; //this leads to total cost of 97.7447
   Seed = (Seed ^ 61) ^ (Seed >> 16);
   Seed *= 9;
   Seed = Seed ^ (Seed >> 4);
   Seed *= 0x27d4eb2d;
   Seed = Seed ^ (Seed >> 15);
   return Seed;
+}
+
+// Finds first non infinite selection
+__device__ unsigned getSelectionForNode(unsigned InitialSelection,
+                                        device::Matrix<Graph::Cost_t> &Node) {
+  assert(InitialSelection < Node.h());
+  for (unsigned Shift = 0; Shift < Node.h(); ++Shift) {
+    auto Idx = (InitialSelection + Shift) % Node.h();
+    if (Node[Idx][0] != Graph::InfCost)
+      return Idx;
+  }
+  return InitialSelection;
 }
 
 __global__ void __calcCostsForRN(device::Graph Graph, unsigned NodeToReduce,
@@ -585,14 +598,15 @@ __global__ void __calcCostsForRN(device::Graph Graph, unsigned NodeToReduce,
   auto &AdjMatrix = Graph.getAdjMatrix();
   auto &NodeToReduceCostVec =
       Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
-  auto SelectionForCurNode = SelectionId % NodeToReduceCostVec.h();
+  auto SelectionForCurNode =
+    getSelectionForNode(SelectionId % NodeToReduceCostVec.h(), NodeToReduceCostVec);
   SelectionId /= NodeToReduceCostVec.h();
   auto Cost = NodeToReduceCostVec[SelectionForCurNode][0];
 
   for (unsigned i = 0; i < NumOfNeighbours; ++i) {
     auto Neighbour = Neighbours[i];
     auto &NeighbCostVec = Graph.getCostMatrix(AdjMatrix[Neighbour][Neighbour]);
-    auto Selection = SelectionId % NeighbCostVec.h();
+    auto Selection = getSelectionForNode(SelectionId % NeighbCostVec.h(), NeighbCostVec);
     SelectionId /= NeighbCostVec.h();
 
     Cost += __getCost(Graph, NodeToReduce, SelectionForCurNode, Neighbour,
@@ -632,6 +646,18 @@ __global__ void __removeReducedNode(device::Graph Graph, unsigned NodeToReduce) 
 
   if (GlobalId == 0)
     Graph.getAdjMatrix()[NodeToReduce][NodeToReduce] = NoNode;
+}
+
+__global__ void __getSelectionForNodeToReduce(device::Graph Graph, unsigned NodeToReduce,
+                                              unsigned InitialSelection, unsigned *Res) {
+  auto GlobalId = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (GlobalId == 0) {
+    auto &AdjMatrix = Graph.getAdjMatrix();
+    auto &NodeToReduceCostVec =
+        Graph.getCostMatrix(AdjMatrix[NodeToReduce][NodeToReduce]);
+    *Res = getSelectionForNode(InitialSelection, NodeToReduceCostVec);
+  }
 }
 
 class DependentSolutionsForDevice final {
@@ -955,6 +981,17 @@ float getInfPercentage(It Beg, It End) {
   return static_cast<float>(InfNum) / static_cast<float>(Count) * 100.0;
 }
 
+unsigned getSelectionForReducedNode(unsigned MinSolutionIdx, unsigned NodeToReduce,
+                                    device::Graph &GraphDevice) {
+  auto InitialIdx =
+    hashGlobalID(MinSolutionIdx) % GraphDevice.getNodeCostSize(NodeToReduce);
+  thrust::device_vector<unsigned> Selection(1);
+  __getSelectionForNodeToReduce<<<1, 1>>>(GraphDevice, NodeToReduce, InitialIdx,
+    thrust::raw_pointer_cast(Selection.data()));
+  cudaDeviceSynchronize();
+  return Selection[0];
+}
+
 bool performRNReduction(device::Graph &GraphDevice, Solution &Sol,
                         unsigned BlockSize, size_t MaxNumOfCombinations) {
   if (GraphDevice.size() == 0)
@@ -996,8 +1033,7 @@ bool performRNReduction(device::Graph &GraphDevice, Solution &Sol,
     << getInfPercentage(Costs.begin(), Costs.end()) << "\n");
   assert(MinSolutionIt != Costs.end());
   auto MinSolutionIdx = std::distance(Costs.begin(), MinSolutionIt);
-  auto SelectionForReducedNode =
-      hashGlobalID(MinSolutionIdx) % GraphDevice.getNodeCostSize(NodeToReduce);
+  auto SelectionForReducedNode = getSelectionForReducedNode(MinSolutionIdx, NodeToReduce, GraphDevice);
   DEBUG_EXPR(std::cout << "Min solution: " << *MinSolutionIt 
       << " with selection: " << SelectionForReducedNode << "\n");
 

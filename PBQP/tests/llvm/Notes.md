@@ -30,3 +30,12 @@ There is a problem with number of nodes in RN!!!!
 
 There should be other reduction than simple full search.
 
+Everything seems fine. Problem was in RN kernel. With fix solution is found.
+
+### Problem
+GlobalId randomization make result almost the worst one.
+infinite costs in vectors should be skipped.
+
+Infinite costs removal helped and made score 97.7447. (same as without inf cost removal and hashing)
+
+
