@@ -7,7 +7,7 @@
 ./generate.sh
 ```
 
-Every BB is converted into one file.
+In order to get solutuons LLVM should be patched.
 
 # Results
 high_register_pressure - is not working.
