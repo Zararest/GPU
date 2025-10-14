@@ -378,8 +378,9 @@ void Solution::print(std::ostream &OS) const {
   auto End = InitialGraph->nodesEnd();
   for (size_t Idx = 0; Beg != End; ++Idx, ++Beg) {
     assert(SelectedVariants.find(Idx) != SelectedVariants.end());
+    auto Selection = SelectedVariants.find(Idx)->second;
     OS << "\"" << Beg->get() << "\" [label = \"" << (*Beg)->getName() << " "
-       << SelectedVariants.find(Idx)->second << "\"]\n";
+       << Selection << "(" << (*Beg)->getCost(Selection) << ") \"]\n";
   }
 
   for (auto &Edge :

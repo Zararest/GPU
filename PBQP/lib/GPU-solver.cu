@@ -2,6 +2,8 @@
 #include "Utils.h"
 
 #include <cassert>
+#include <iterator>
+#include <limits>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/device_vector.h>
@@ -562,6 +564,7 @@ __device__ Graph::Cost_t __getCost(device::Graph &Graph, unsigned NodeToReduce,
 }
 
 __host__ __device__ unsigned hashGlobalID(unsigned Seed) {
+  //return Seed; this leads to total cost of 97.7447
   Seed = (Seed ^ 61) ^ (Seed >> 16);
   Seed *= 9;
   Seed = Seed ^ (Seed >> 4);
@@ -940,6 +943,18 @@ void commitRNReductionToHost(device::Graph &GraphDevice, unsigned NodeToReduce,
   }
 }
 
+template <typename It>
+float getInfPercentage(It Beg, It End) {
+  auto Count = std::distance(Beg, End);
+  auto InfNum = 0u;
+  for (auto Cost : utils::makeRange(Beg, End))
+    if (Cost == Graph::InfCost)
+      InfNum++;
+  if (InfNum == 0)
+    return 0;
+  return static_cast<float>(InfNum) / static_cast<float>(Count) * 100.0;
+}
+
 bool performRNReduction(device::Graph &GraphDevice, Solution &Sol,
                         unsigned BlockSize, size_t MaxNumOfCombinations) {
   if (GraphDevice.size() == 0)
@@ -977,10 +992,12 @@ bool performRNReduction(device::Graph &GraphDevice, Solution &Sol,
   utils::checkKernelsExec();
 
   auto MinSolutionIt = thrust::min_element(Costs.begin(), Costs.end());
+  DEBUG_EXPR(std::cout << "Inf cost percentage: " 
+    << getInfPercentage(Costs.begin(), Costs.end()) << "\n");
   assert(MinSolutionIt != Costs.end());
   auto MinSolutionIdx = std::distance(Costs.begin(), MinSolutionIt);
   auto SelectionForReducedNode =
-      MinSolutionIdx % GraphDevice.getNodeCostSize(NodeToReduce);
+      hashGlobalID(MinSolutionIdx) % GraphDevice.getNodeCostSize(NodeToReduce);
   DEBUG_EXPR(std::cout << "Min solution: " << *MinSolutionIt 
       << " with selection: " << SelectionForReducedNode << "\n");
 
