@@ -32,10 +32,30 @@ There should be other reduction than simple full search.
 
 Everything seems fine. Problem was in RN kernel. With fix solution is found.
 
-### Problem
+### Problem with full search pipeline
 GlobalId randomization make result almost the worst one.
 infinite costs in vectors should be skipped.
 
 Infinite costs removal helped and made score 97.7447. (same as without inf cost removal and hashing)
 
+### Results for complex pipeline
+```
+Final cost of the solution: 97.7447 (this is for without-inf case)
+Reductions on GPU time: 156.696000ms
+```
 
+
+# Compare with LLVM
+On example.ll.high_register_pressure.0
+
+LLVM solution:
+Total cost: 1.163804e+02
+
+My solution:
+Final cost of the solution: 116.962
+
+On example.ll.high_register_pressure.0
+Total cost: -1.000000e+00
+
+My solution:
+Final cost of the solution: 12.1319

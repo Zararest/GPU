@@ -902,7 +902,6 @@ unsigned getNodeWithMostNeighbNum(device::Graph &GraphDevice,
   utils::checkKernelsExec();
 
   auto MaxElemIt = thrust::min_element(NumOfNeighb.begin(), NumOfNeighb.end());
-  std::cout << "Number of Neighb: " << *MaxElemIt << "\n";
   return std::distance(NumOfNeighb.begin(), MaxElemIt);
 }
 
@@ -1319,24 +1318,24 @@ ReductionsSolver::CleanUpPass::run(const Graph &Graph,
 void ReductionsSolver::addPasses(PassManager &PM) {
   PM.addPass(Pass_t{new InitStatePass}, "Loader");
   // Loop with only R0 and R1 reductions
-//  PM.addLoopStart(Condition_t{new LoopConditionHandler});
-//  PM.addPass(Pass_t{new R0Reduction}, "R0");
-//  PM.addPass(Pass_t{new R1Reduction}, "R1");
-//  PM.addPass(Pass_t{new R1Reduction}, "R1");
-//  PM.addPass(Pass_t{new R0Reduction}, "R0");
-//  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
-//  PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
-//  PM.addLoopEnd();
-//  // Loop with RN reductions
-//  PM.addLoopStart(Condition_t{new LoopConditionHandler});
-//  PM.addPass(Pass_t{new RNReduction}, "RN");
-//  PM.addPass(Pass_t{new R0Reduction}, "R0");
-//  PM.addPass(Pass_t{new R1Reduction}, "R1");
-//  PM.addPass(Pass_t{new R1Reduction}, "R1");
-//  PM.addPass(Pass_t{new R0Reduction}, "R0");
-//  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
-//  PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
-//  PM.addLoopEnd();
+  PM.addLoopStart(Condition_t{new LoopConditionHandler});
+  PM.addPass(Pass_t{new R0Reduction}, "R0");
+  PM.addPass(Pass_t{new R1Reduction}, "R1");
+  PM.addPass(Pass_t{new R1Reduction}, "R1");
+  PM.addPass(Pass_t{new R0Reduction}, "R0");
+  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+  PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
+  PM.addLoopEnd();
+  // Loop with RN reductions
+  PM.addLoopStart(Condition_t{new LoopConditionHandler});
+  PM.addPass(Pass_t{new RNReduction}, "RN");
+  PM.addPass(Pass_t{new R0Reduction}, "R0");
+  PM.addPass(Pass_t{new R1Reduction}, "R1");
+  PM.addPass(Pass_t{new R1Reduction}, "R1");
+  PM.addPass(Pass_t{new R0Reduction}, "R0");
+  PM.addPass(Pass_t{new CleanUpPass}, "Clean up");
+  PM.addPass(Pass_t{new GraphChangeChecker}, "Condition checker");
+  PM.addLoopEnd();
 
   PM.addPass(Pass_t{new FinalFullSearch}, "Final full search with RN");
   PM.addPass(Pass_t{new GraphDeleter}, "Deleter");
