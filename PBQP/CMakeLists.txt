@@ -21,3 +21,6 @@ target_link_libraries(Graph-generator PRIVATE PBQP)
 
 add_executable(Perf-measure Perf-measurements.cpp)
 target_link_libraries(Perf-measure PRIVATE PBQP)
+
+add_executable(solver-api solver-api.cpp)
+target_link_libraries(solver-api PRIVATE PBQP)

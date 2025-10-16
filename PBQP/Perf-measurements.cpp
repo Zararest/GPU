@@ -20,22 +20,10 @@ void printProfileInfo(PBQP::GPUSolver::PassManager::Profile_t &ProfileInfo) {
   std::cout << std::endl;
 }
 
-PBQP::Graph readGraph(std::istream &IS, bool ParseLLVM) {
-  auto Graph = PBQP::Graph{};
-  if (ParseLLVM) {
-    Graph = PBQP::GraphBuilders::readLLVM(IS);
-  } else {
-    Graph.read(IS);
-  }
-  if (!Graph.validate())
-    utils::reportFatalError("Invalid graph");
-  return Graph;
-}
-
 double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
                   bool OnlyTime, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = readGraph(IS, ParseLLVM);
+  auto Graph = PBQP::readGraph(IS, ParseLLVM);
 
   auto Solver = PBQP::GPUFullSearch{};
 
@@ -58,7 +46,7 @@ double measureGPU(const std::string &InFileName, const std::string &AnsFileName,
 double measureCPU(const std::string &InFileName,
                   const std::string &AnsFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = readGraph(IS, ParseLLVM);
+  auto Graph = PBQP::readGraph(IS, ParseLLVM);
 
   auto Solver = PBQP::CPUFullSearch{};
 
@@ -74,7 +62,7 @@ double measureCPU(const std::string &InFileName,
 
 void checkSolution(const std::string &InFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = readGraph(IS, ParseLLVM);
+  auto Graph = PBQP::readGraph(IS, ParseLLVM);
 
   auto GPUSolver = PBQP::ReductionsSolver{};
   auto RefSolver = PBQP::GPUFullSearch{};
@@ -94,7 +82,7 @@ void checkSolution(const std::string &InFileName, bool ParseLLVM) {
 double measureReductions(const std::string &InFileName,
                   const std::string &AnsFileName, bool ParseLLVM) {
   auto IS = std::ifstream{InFileName};
-  auto Graph = readGraph(IS, ParseLLVM);
+  auto Graph = PBQP::readGraph(IS, ParseLLVM);
 
   auto Solver = PBQP::ReductionsSolver{};
 

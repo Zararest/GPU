@@ -59,3 +59,6 @@ Total cost: -1.000000e+00
 
 My solution:
 Final cost of the solution: 12.1319
+
+# Dataset
+Dataset consists of PBQP graps from llvm that are generated during build of LLVM itself.

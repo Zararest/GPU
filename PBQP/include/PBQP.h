@@ -221,4 +221,6 @@ Graph readLLVM(std::istream &IS);
 
 } // namespace GraphBuilders
 
+Graph readGraph(std::istream &IS, bool ParseLLVM);
+
 } // namespace PBQP

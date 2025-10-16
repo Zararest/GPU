@@ -545,4 +545,17 @@ Graph GraphBuilders::readLLVM(std::istream &IS) {
   return NewGraph;
 }
 
+Graph readGraph(std::istream &IS, bool ParseLLVM) {
+  auto Graph = ::PBQP::Graph{};
+  if (ParseLLVM) {
+    Graph = GraphBuilders::readLLVM(IS);
+  } else {
+    Graph.read(IS);
+  }
+  if (!Graph.validate())
+    utils::reportFatalError("Invalid graph");
+  return Graph;
+}
+
+
 } // namespace PBQP
